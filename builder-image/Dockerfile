@@ -36,7 +36,7 @@ RUN flatpak install -y --noninteractive flathub \
     org.kde.Sdk//6.10
 
 # Install flat-manager-client (Python-based) for uploading builds
-RUN dnf install -y python3 python3-pip python3-aiohttp && \
+RUN dnf install -y python3 python3-pip python3-aiohttp python3-gobject ostree-libs && \
     pip3 install --break-system-packages aiohttp tenacity && \
     curl -sL https://raw.githubusercontent.com/flatpak/flat-manager/master/flat-manager-client \
       -o /usr/local/bin/flat-manager-client && \

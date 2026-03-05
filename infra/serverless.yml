@@ -437,7 +437,7 @@ resources:
               - Name: DATA_DIR
                 Value: /var/data/flatmanager
               - Name: FLAT_MANAGER_SECRET
-                Value: ${ssm:/friendlyhub/${self:provider.stage}/flat-manager-token, 'changeme'}
+                Value: ${ssm:/friendlyhub/${self:provider.stage}/flat-manager-secret}
               - Name: REPO_CONFIG
                 Value: /var/data/flatmanager/config.json
               - Name: RUST_BACKTRACE
