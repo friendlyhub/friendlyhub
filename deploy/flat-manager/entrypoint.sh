@@ -56,4 +56,5 @@ echo "flat-manager config written to /config.json"
 echo "Data directory: ${DATA_DIR}"
 echo "Listening on port: ${FM_PORT}"
 
+cd /
 exec /usr/local/bin/flat-manager
