@@ -424,6 +424,8 @@ resources:
                 Value: /var/data/flatmanager
               - Name: FLAT_MANAGER_SECRET
                 Value: ${ssm:/friendlyhub/${self:provider.stage}/flat-manager-token, 'changeme'}
+              - Name: REPO_CONFIG
+                Value: /config.json
               - Name: RUST_BACKTRACE
                 Value: "1"
             MountPoints:
