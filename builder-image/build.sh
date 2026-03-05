@@ -37,6 +37,7 @@ flatpak-builder \
     --default-branch="${BRANCH}" \
     --disable-cache \
     --install-deps-from=flathub \
+    --disable-rofiles-fuse \
     "${BUILD_DIR}" \
     "${MANIFEST_PATH}"
 
