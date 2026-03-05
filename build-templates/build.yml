@@ -1,8 +1,6 @@
 # FriendlyHub Build Workflow
 # This workflow is placed in each app's repo under .github/workflows/build.yml
-# It can be triggered by:
-#   1. Push to main (after PR merge)
-#   2. workflow_dispatch from the FriendlyHub API
+# It can be triggered by workflow_dispatch from the FriendlyHub API.
 #
 # The workflow builds the Flatpak, uploads it to flat-manager, and notifies
 # the FriendlyHub API via webhook.
@@ -10,8 +8,6 @@
 name: Build Flatpak
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       submission_id:

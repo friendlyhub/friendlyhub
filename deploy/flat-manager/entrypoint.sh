@@ -55,6 +55,7 @@ cat > "${CONFIG_PATH}" <<EOF
             }
         }
     },
+    "host": "0.0.0.0",
     "port": ${FM_PORT},
     "delay-update-secs": 10,
     "database-url": "${SAFE_DB_URL}",
