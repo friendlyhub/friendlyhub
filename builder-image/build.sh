@@ -5,10 +5,9 @@
 # Required env vars:
 #   MANIFEST_PATH    — path to the Flatpak manifest (JSON/YAML)
 #   APP_ID           — the Flatpak app ID (e.g. org.example.App)
-#   FLAT_MANAGER_URL — flat-manager API URL
 #   FLAT_MANAGER_TOKEN — flat-manager API token
 #   REPO_NAME        — flat-manager repo name (e.g. "stable")
-#   FRIENDLYHUB_API_URL — FriendlyHub API webhook URL
+#   FRIENDLYHUB_API_URL — FriendlyHub API URL (used to discover flat-manager)
 #   WEBHOOK_SECRET   — shared secret for webhook auth
 #   SUBMISSION_ID    — FriendlyHub submission UUID
 #
@@ -26,6 +25,19 @@ echo "=== FriendlyHub Build ==="
 echo "App: ${APP_ID}"
 echo "Manifest: ${MANIFEST_PATH}"
 echo "Branch: ${BRANCH}"
+
+# Discover flat-manager URL from the FriendlyHub API
+if [ -z "${FLAT_MANAGER_URL:-}" ]; then
+    echo ">>> Discovering flat-manager URL..."
+    FM_RESPONSE=$(curl -sf "${FRIENDLYHUB_API_URL}/api/v1/internal/flat-manager-url")
+    FLAT_MANAGER_URL=$(echo "${FM_RESPONSE}" | jq -r '.url')
+    if [ -z "${FLAT_MANAGER_URL}" ] || [ "${FLAT_MANAGER_URL}" = "null" ]; then
+        echo "ERROR: Could not discover flat-manager URL"
+        echo "Response: ${FM_RESPONSE}"
+        exit 1
+    fi
+    echo ">>> flat-manager URL: ${FLAT_MANAGER_URL}"
+fi
 echo ""
 
 # Step 1: Build the Flatpak

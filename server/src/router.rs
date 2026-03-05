@@ -15,6 +15,8 @@ pub struct AppState {
     pub config: Config,
     pub flat_manager: FlatManagerClient,
     pub github: GitHubService,
+    pub ecs_client: aws_sdk_ecs::Client,
+    pub ec2_client: aws_sdk_ec2::Client,
 }
 
 pub fn build_router(state: AppState) -> Router {
@@ -30,6 +32,7 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api/v1", routes::submissions::routes())
         .nest("/api/v1", routes::webhooks::routes())
         .nest("/api/v1", routes::review::routes())
+        .nest("/api/v1", routes::internal::routes())
         .layer(TraceLayer::new_for_http())
         .layer(cors)
         .with_state(state)

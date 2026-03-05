@@ -13,6 +13,8 @@ pub struct Config {
     pub github_token: String,
     pub jwt_secret: String,
     pub frontend_url: String,
+    pub ecs_cluster: String,
+    pub ecs_service: String,
 }
 
 impl Config {
@@ -39,6 +41,10 @@ impl Config {
                 .unwrap_or_else(|_| "dev-secret-change-me".into()),
             frontend_url: env::var("FRONTEND_URL")
                 .unwrap_or_else(|_| "http://localhost:5173".into()),
+            ecs_cluster: env::var("ECS_CLUSTER")
+                .unwrap_or_else(|_| "friendlyhub-dev".into()),
+            ecs_service: env::var("ECS_SERVICE")
+                .unwrap_or_else(|_| "flat-manager".into()),
         }
     }
 

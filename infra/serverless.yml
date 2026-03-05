@@ -20,6 +20,8 @@ provider:
     GITHUB_TOKEN: ${ssm:/friendlyhub/${self:provider.stage}/github-token}
     JWT_SECRET: ${ssm:/friendlyhub/${self:provider.stage}/jwt-secret, 'placeholder'}
     FRONTEND_URL: ${ssm:/friendlyhub/${self:provider.stage}/frontend-url, 'https://friendlyhub.org'}
+    ECS_CLUSTER: !Ref ECSCluster
+    ECS_SERVICE: flat-manager
     RUST_LOG: info
   iam:
     role:
@@ -42,6 +44,18 @@ provider:
           Resource:
             - !GetAtt DynamoDBTable.Arn
             - !Sub "${DynamoDBTable.Arn}/index/*"
+        - Effect: Allow
+          Action:
+            - ecs:ListTasks
+            - ecs:DescribeTasks
+          Resource: "*"
+          Condition:
+            ArnEquals:
+              ecs:cluster: !GetAtt ECSCluster.Arn
+        - Effect: Allow
+          Action:
+            - ec2:DescribeNetworkInterfaces
+          Resource: "*"
 
 package:
   artifact: .build/friendlyhub.zip

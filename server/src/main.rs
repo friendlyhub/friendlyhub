@@ -37,12 +37,16 @@ async fn main() {
     );
 
     let github = GitHubService::new(&config.github_org, &config.github_token);
+    let ecs_client = aws_sdk_ecs::Client::new(&aws_config);
+    let ec2_client = aws_sdk_ec2::Client::new(&aws_config);
 
     let state = AppState {
         db,
         config,
         flat_manager,
         github,
+        ecs_client,
+        ec2_client,
     };
 
     let app = build_router(state);

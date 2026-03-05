@@ -34,6 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/friendlyhub/flatpak-builder:latest
+      options: --privileged
 
     steps:
       - name: Checkout
@@ -89,7 +90,6 @@ jobs:
         env:
           MANIFEST_PATH: ${{ steps.detect.outputs.manifest }}
           APP_ID: ${{ steps.detect.outputs.app_id }}
-          FLAT_MANAGER_URL: ${{ secrets.FLAT_MANAGER_URL }}
           FLAT_MANAGER_TOKEN: ${{ secrets.FLAT_MANAGER_TOKEN }}
           REPO_NAME: stable
           FRIENDLYHUB_API_URL: ${{ secrets.FRIENDLYHUB_API_URL }}
