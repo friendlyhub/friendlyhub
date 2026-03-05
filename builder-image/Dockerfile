@@ -35,11 +35,12 @@ RUN flatpak install -y --noninteractive flathub \
     org.kde.Platform//6.10 \
     org.kde.Sdk//6.10
 
-# Install flat-manager-client for uploading builds
-# Built from the flat-manager repo (it's not a standalone crate)
-RUN dnf install -y cargo rust openssl-devel && \
-    cargo install --git https://github.com/flatpak/flat-manager.git flat-manager-client && \
-    dnf remove -y cargo rust openssl-devel && \
+# Install flat-manager-client (Python-based) for uploading builds
+RUN dnf install -y python3 python3-pip python3-aiohttp && \
+    pip3 install --break-system-packages aiohttp tenacity && \
+    curl -sL https://raw.githubusercontent.com/flatpak/flat-manager/master/flat-manager-client \
+      -o /usr/local/bin/flat-manager-client && \
+    chmod +x /usr/local/bin/flat-manager-client && \
     dnf clean all
 
 # Copy the build script
