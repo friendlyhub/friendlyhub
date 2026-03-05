@@ -17,6 +17,7 @@ provider:
     GITHUB_CLIENT_ID: ${ssm:/friendlyhub/${self:provider.stage}/github-client-id, 'placeholder'}
     GITHUB_CLIENT_SECRET: ${ssm:/friendlyhub/${self:provider.stage}/github-client-secret, 'placeholder'}
     GITHUB_ORG: friendlyhub
+    GITHUB_TOKEN: ${ssm:/friendlyhub/${self:provider.stage}/github-token}
     JWT_SECRET: ${ssm:/friendlyhub/${self:provider.stage}/jwt-secret, 'placeholder'}
     FRONTEND_URL: ${ssm:/friendlyhub/${self:provider.stage}/frontend-url, 'https://friendlyhub.org'}
     RUST_LOG: info

@@ -5,6 +5,7 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::Value;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
@@ -25,6 +26,10 @@ pub fn routes() -> Router<AppState> {
 struct SubmitRequest {
     version: String,
     manifest: Value,
+    /// Optional companion source files (e.g. cargo-sources.json, node-sources.json).
+    /// Keys are filenames, values are file contents as strings.
+    #[serde(default)]
+    source_files: HashMap<String, String>,
 }
 
 async fn submit(
@@ -72,12 +77,12 @@ async fn submit(
     )
     .await?;
 
-    // TODO: Phase 2 continuation — trigger GHA build here
-    // For now, submission stays in pending_build until we wire up GHA triggers
+    // Push manifest to the app's GitHub repo and trigger a build
+    trigger_build(&state, &app.app_id, sub.id, &input.manifest, &input.source_files).await?;
 
     Ok(Json(serde_json::json!({
         "id": sub.id,
-        "status": sub.status,
+        "status": "building",
         "version": sub.version,
         "warnings": validation.warnings,
     })))
@@ -110,6 +115,101 @@ async fn get_submission(
 
     Ok(Json(sub))
 }
+
+/// Push the manifest to the app's GitHub repo and trigger a GHA build.
+async fn trigger_build(
+    state: &AppState,
+    app_id: &str,
+    submission_id: Uuid,
+    manifest: &Value,
+    source_files: &HashMap<String, String>,
+) -> Result<(), AppError> {
+    // Ensure the repo exists in the org
+    let repo = app_id; // repo name = app_id (e.g. org.example.MyApp)
+    if !state.github.repo_exists(repo).await? {
+        state
+            .github
+            .create_repo(repo, &format!("FriendlyHub build repo for {app_id}"))
+            .await?;
+    }
+
+    // Push the manifest as the main manifest file
+    let manifest_str = serde_json::to_string_pretty(manifest)
+        .map_err(|e| AppError::Internal(format!("Failed to serialize manifest: {e}")))?;
+    state
+        .github
+        .put_file(
+            repo,
+            &format!("{app_id}.json"),
+            &manifest_str,
+            &format!("Update manifest for submission {submission_id}"),
+        )
+        .await?;
+
+    // Push companion source files (e.g. cargo-sources.json, node-sources.json)
+    for (filename, content) in source_files {
+        // Only allow JSON files in the repo root — no path traversal
+        let safe_name = std::path::Path::new(filename)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| AppError::BadRequest(format!("Invalid source file name: {filename}")))?;
+        state
+            .github
+            .put_file(
+                repo,
+                safe_name,
+                content,
+                &format!("Update {safe_name} for submission {submission_id}"),
+            )
+            .await?;
+    }
+
+    // Push the GHA workflows if they don't exist yet
+    state
+        .github
+        .put_file(
+            repo,
+            ".github/workflows/build.yml",
+            BUILD_WORKFLOW_YAML,
+            "Add FriendlyHub build workflow",
+        )
+        .await?;
+    state
+        .github
+        .put_file(
+            repo,
+            ".github/workflows/pr-check.yml",
+            PR_CHECK_WORKFLOW_YAML,
+            "Add FriendlyHub PR check workflow",
+        )
+        .await?;
+
+    // Trigger the workflow
+    let inputs = serde_json::json!({
+        "submission_id": submission_id.to_string(),
+        "app_id": app_id,
+        "manifest_path": format!("{app_id}.json"),
+    });
+    state
+        .github
+        .trigger_build(repo, "build.yml", "main", &inputs)
+        .await?;
+
+    // Update submission status to building
+    submission::update_status(&state.db, submission_id, "building").await?;
+
+    // Try to find the run ID (best-effort, it may not be available immediately)
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    if let Some(run) = state.github.find_latest_run(repo, "build.yml").await? {
+        submission::set_build_info(&state.db, submission_id, run.id, &run.html_url).await?;
+    }
+
+    Ok(())
+}
+
+/// GHA workflows pushed to each app repo. Match build-templates/ in the monorepo.
+const BUILD_WORKFLOW_YAML: &str = include_str!("../../../build-templates/build.yml");
+const PR_CHECK_WORKFLOW_YAML: &str = include_str!("../../../build-templates/pr-check.yml");
 
 async fn validate_submission(
     State(state): State<AppState>,

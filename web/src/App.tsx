@@ -9,6 +9,7 @@ import AppDetail from './pages/AppDetail';
 import MyApps from './pages/MyApps';
 import NewApp from './pages/NewApp';
 import Submissions from './pages/Submissions';
+import SubmitVersion from './pages/SubmitVersion';
 import SubmissionDetail from './pages/SubmissionDetail';
 import ReviewQueue from './pages/ReviewQueue';
 import ReviewDetail from './pages/ReviewDetail';
@@ -65,6 +66,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <NewApp />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/my/apps/:appId/submit"
+          element={
+            <ProtectedRoute>
+              <SubmitVersion />
             </ProtectedRoute>
           }
         />

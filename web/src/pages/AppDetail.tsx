@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { getApp } from '../api/client';
+import { useAuthStore } from '../stores/auth';
 
 export default function AppDetail() {
   const { appId } = useParams<{ appId: string }>();
+  const { user } = useAuthStore();
 
   const { data: app, isLoading, error } = useQuery({
     queryKey: ['app', appId],
@@ -27,8 +29,18 @@ export default function AppDetail() {
         <div className="w-20 h-20 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 font-bold text-2xl shrink-0">
           {app.name.charAt(0)}
         </div>
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">{app.name}</h1>
+        <div className="flex-1">
+          <div className="flex items-center justify-between">
+            <h1 className="text-3xl font-bold text-gray-900">{app.name}</h1>
+            {user && user.id === app.owner_id && (
+              <Link
+                to={`/my/apps/${app.app_id}/submit`}
+                className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700"
+              >
+                Submit Version
+              </Link>
+            )}
+          </div>
           <p className="text-gray-500 mt-1">{app.summary}</p>
           <div className="flex items-center gap-3 mt-3">
             {app.is_verified && (

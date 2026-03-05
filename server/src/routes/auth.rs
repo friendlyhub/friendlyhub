@@ -34,11 +34,11 @@ struct CallbackParams {
 }
 
 /// GitHub redirects here after the user authorizes. We exchange the code for a token,
-/// fetch the user profile, upsert into our DB, and return a JWT.
+/// fetch the user profile, upsert into our DB, and redirect to the frontend with a JWT.
 async fn github_callback(
     State(state): State<AppState>,
     Query(params): Query<CallbackParams>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Redirect, AppError> {
     let access_token = github_oauth::exchange_code(
         &state.config.github_client_id,
         &state.config.github_client_secret,
@@ -62,10 +62,8 @@ async fn github_callback(
     let token = jwt::create_token(db_user.id, &db_user.role, &state.config.jwt_secret)
         .map_err(|e| AppError::Internal(format!("Failed to create JWT: {e}")))?;
 
-    Ok(Json(json!({
-        "token": token,
-        "user": user::UserResponse::from(db_user),
-    })))
+    let redirect_url = format!("{}/auth/callback?token={token}", state.config.frontend_url);
+    Ok(Redirect::temporary(&redirect_url))
 }
 
 /// Returns the currently authenticated user's profile.

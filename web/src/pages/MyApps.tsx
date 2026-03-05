@@ -25,23 +25,31 @@ export default function MyApps() {
       ) : apps && apps.length > 0 ? (
         <div className="space-y-3">
           {apps.map((app) => (
-            <Link
+            <div
               key={app.id}
-              to={`/apps/${app.app_id}`}
-              className="block bg-white rounded-lg border border-gray-200 p-4 hover:shadow-sm"
+              className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-sm"
             >
               <div className="flex items-center justify-between">
-                <div>
+                <Link to={`/apps/${app.app_id}`} className="flex-1">
                   <h3 className="font-semibold text-gray-900">{app.name}</h3>
                   <p className="text-sm text-gray-500 font-mono">{app.app_id}</p>
+                </Link>
+                <div className="flex items-center gap-3">
+                  <Link
+                    to={`/my/apps/${app.app_id}/submit`}
+                    className="text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Submit Version
+                  </Link>
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded-full ${app.is_published ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}
+                  >
+                    {app.is_published ? 'Published' : 'Not Published'}
+                  </span>
                 </div>
-                <span
-                  className={`text-xs px-2 py-0.5 rounded-full ${app.is_published ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}
-                >
-                  {app.is_published ? 'Published' : 'Not Published'}
-                </span>
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       ) : (

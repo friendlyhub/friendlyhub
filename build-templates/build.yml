@@ -39,6 +39,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Fetch shared-modules
+        run: |
+          if grep -rq 'shared-modules/' *.json *.yaml *.yml 2>/dev/null; then
+            echo "Manifest references shared-modules, cloning..."
+            git clone --depth=1 https://github.com/flathub/shared-modules.git shared-modules
+          else
+            echo "No shared-modules references found, skipping."
+          fi
+
       - name: Detect manifest
         id: detect
         run: |

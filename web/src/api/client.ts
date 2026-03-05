@@ -73,12 +73,23 @@ export const updateApp = (
   });
 
 // Submissions
-export const submitApp = (appId: string, version: string, manifest: unknown) =>
+export const submitApp = (
+  appId: string,
+  version: string,
+  manifest: unknown,
+  sourceFiles?: Record<string, string>,
+) =>
   request<{ id: string; status: string; version: string; warnings: string[] }>(
     `/apps/${appId}/submit`,
     {
       method: 'POST',
-      body: JSON.stringify({ version, manifest }),
+      body: JSON.stringify({
+        version,
+        manifest,
+        ...(sourceFiles && Object.keys(sourceFiles).length > 0
+          ? { source_files: sourceFiles }
+          : {}),
+      }),
     },
   );
 

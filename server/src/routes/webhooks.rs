@@ -95,16 +95,27 @@ async fn webhook_submit(
     )
     .await?;
 
+    // Trigger GHA build (manifest is already in repo from the merged PR)
+    let inputs = serde_json::json!({
+        "submission_id": sub.id.to_string(),
+    });
+    state
+        .github
+        .trigger_build(&payload.app_id, "build.yml", "main", &inputs)
+        .await?;
+
+    submission::update_status(&state.db, sub.id, "building").await?;
+
     tracing::info!(
         submission_id = %sub.id,
         app_id = %payload.app_id,
         version = %payload.version,
-        "Submission created via webhook"
+        "Submission created via webhook, build triggered"
     );
 
     Ok(Json(serde_json::json!({
         "id": sub.id,
-        "status": sub.status,
+        "status": "building",
         "version": sub.version,
     })))
 }
