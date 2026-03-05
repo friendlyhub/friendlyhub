@@ -36,6 +36,7 @@ flatpak-builder \
     --state-dir="${STATE_DIR}" \
     --default-branch="${BRANCH}" \
     --disable-cache \
+    --install-deps-from=flathub \
     "${BUILD_DIR}" \
     "${MANIFEST_PATH}"
 
