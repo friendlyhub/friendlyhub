@@ -64,7 +64,7 @@ BUILD_RESPONSE=$(curl -s -X POST \
     -d "{\"repo\": \"${REPO_NAME}\"}")
 
 FM_BUILD_ID=$(echo "${BUILD_RESPONSE}" | jq -r '.id')
-FM_BUILD_REPO=$(echo "${BUILD_RESPONSE}" | jq -r '.repo')
+FM_BUILD_URL="${FLAT_MANAGER_URL}/api/v1/build/${FM_BUILD_ID}"
 
 if [ "${FM_BUILD_ID}" = "null" ] || [ -z "${FM_BUILD_ID}" ]; then
     echo "ERROR: Failed to create flat-manager build"
@@ -84,7 +84,7 @@ echo ">>> flat-manager build ID: ${FM_BUILD_ID}"
 # Step 3: Upload the build to flat-manager
 echo ">>> Uploading to flat-manager..."
 flat-manager-client --token "${FLAT_MANAGER_TOKEN}" push \
-    "${FM_BUILD_REPO}" \
+    "${FM_BUILD_URL}" \
     "${REPO_DIR}"
 
 # Step 4: Commit the build
