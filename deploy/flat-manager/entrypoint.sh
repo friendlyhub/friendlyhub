@@ -21,7 +21,7 @@ fi
 
 if [ ! -d "${DATA_DIR}/build-repo/objects" ]; then
     echo "Initializing OSTree build-repo at ${DATA_DIR}/build-repo..."
-    ostree init --mode=bare-user --repo="${DATA_DIR}/build-repo"
+    ostree init --mode=archive-z2 --repo="${DATA_DIR}/build-repo"
 fi
 
 cat > /config.json <<EOF
