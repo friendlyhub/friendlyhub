@@ -1,1 +1,26 @@
 dev/
+
+# Rust
+server/target/
+**/*.rs.bk
+
+# Node
+web/node_modules/
+web/dist/
+
+# Environment
+.env
+*.env.local
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Serverless
+.serverless/
+infra/.build/

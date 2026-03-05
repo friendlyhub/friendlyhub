@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo build)",
+      "Bash(cargo test)",
+      "Bash(cargo check)",
+      "Bash(cargo add:*)",
+      "Bash(cargo run)",
+      "Bash(npm install)",
+      "Bash(npm run:*)",
+      "Bash(npm test)",
+      "Bash(docker compose:*)",
+      "Bash(mkdir:*)",
+      "Bash(ls:*)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)"
+    ],
+    "deny": []
+  }
+}

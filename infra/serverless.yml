@@ -1,0 +1,425 @@
+service: friendlyhub
+
+provider:
+  name: aws
+  region: eu-west-1
+  runtime: provided.al2023
+  architecture: x86_64
+  stage: ${opt:stage, 'dev'}
+  stackTags:
+    project: friendlyhub
+  tags:
+    project: friendlyhub
+  environment:
+    DYNAMODB_TABLE: !Ref DynamoDBTable
+    FLAT_MANAGER_URL: ${ssm:/friendlyhub/${self:provider.stage}/flat-manager-url, 'placeholder'}
+    FLAT_MANAGER_TOKEN: ${ssm:/friendlyhub/${self:provider.stage}/flat-manager-token, 'placeholder'}
+    GITHUB_CLIENT_ID: ${ssm:/friendlyhub/${self:provider.stage}/github-client-id, 'placeholder'}
+    GITHUB_CLIENT_SECRET: ${ssm:/friendlyhub/${self:provider.stage}/github-client-secret, 'placeholder'}
+    GITHUB_ORG: friendlyhub
+    JWT_SECRET: ${ssm:/friendlyhub/${self:provider.stage}/jwt-secret, 'placeholder'}
+    FRONTEND_URL: ${ssm:/friendlyhub/${self:provider.stage}/frontend-url, 'https://friendlyhub.org'}
+    RUST_LOG: info
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - ssm:GetParameter
+            - ssm:GetParameters
+          Resource:
+            - arn:aws:ssm:${self:provider.region}:*:parameter/friendlyhub/*
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:DescribeTable
+          Resource:
+            - !GetAtt DynamoDBTable.Arn
+            - !Sub "${DynamoDBTable.Arn}/index/*"
+
+package:
+  artifact: .build/friendlyhub.zip
+
+functions:
+  api:
+    handler: bootstrap
+    timeout: 29
+    memorySize: 256
+    description: FriendlyHub API (Axum on Lambda via Web Adapter)
+    environment:
+      AWS_LWA_PORT: "3000"
+    layers:
+      - arn:aws:lambda:eu-west-1:753240598075:layer:LambdaAdapterLayerX86:24
+    events:
+      - httpApi:
+          path: /api/{proxy+}
+          method: ANY
+      - httpApi:
+          path: /api/v1/health
+          method: GET
+
+resources:
+  Parameters:
+    Stage:
+      Type: String
+      Default: ${self:provider.stage}
+
+  Resources:
+    # ---- DynamoDB (single-table design) ----
+    DynamoDBTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: friendlyhub-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: PK
+            AttributeType: S
+          - AttributeName: SK
+            AttributeType: S
+          - AttributeName: GSI1PK
+            AttributeType: S
+          - AttributeName: GSI1SK
+            AttributeType: S
+          - AttributeName: GSI2PK
+            AttributeType: S
+          - AttributeName: GSI2SK
+            AttributeType: S
+        KeySchema:
+          - AttributeName: PK
+            KeyType: HASH
+          - AttributeName: SK
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: GSI1
+            KeySchema:
+              - AttributeName: GSI1PK
+                KeyType: HASH
+              - AttributeName: GSI1SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+          - IndexName: GSI2
+            KeySchema:
+              - AttributeName: GSI2PK
+                KeyType: HASH
+              - AttributeName: GSI2SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: true
+        Tags:
+          - Key: project
+            Value: friendlyhub
+
+    # ---- VPC (for Fargate only, no DB subnets needed) ----
+    VPC:
+      Type: AWS::EC2::VPC
+      Properties:
+        CidrBlock: 10.0.0.0/16
+        EnableDnsSupport: true
+        EnableDnsHostnames: true
+        Tags:
+          - Key: project
+            Value: friendlyhub
+          - Key: Name
+            Value: friendlyhub-vpc
+
+    InternetGateway:
+      Type: AWS::EC2::InternetGateway
+      Properties:
+        Tags:
+          - Key: project
+            Value: friendlyhub
+
+    AttachGateway:
+      Type: AWS::EC2::VPCGatewayAttachment
+      Properties:
+        VpcId: !Ref VPC
+        InternetGatewayId: !Ref InternetGateway
+
+    PublicSubnet1:
+      Type: AWS::EC2::Subnet
+      Properties:
+        VpcId: !Ref VPC
+        CidrBlock: 10.0.1.0/24
+        AvailabilityZone: eu-west-1a
+        MapPublicIpOnLaunch: true
+        Tags:
+          - Key: project
+            Value: friendlyhub
+          - Key: Name
+            Value: friendlyhub-public-1
+
+    PublicSubnet2:
+      Type: AWS::EC2::Subnet
+      Properties:
+        VpcId: !Ref VPC
+        CidrBlock: 10.0.2.0/24
+        AvailabilityZone: eu-west-1b
+        MapPublicIpOnLaunch: true
+        Tags:
+          - Key: project
+            Value: friendlyhub
+          - Key: Name
+            Value: friendlyhub-public-2
+
+    PublicRouteTable:
+      Type: AWS::EC2::RouteTable
+      Properties:
+        VpcId: !Ref VPC
+        Tags:
+          - Key: project
+            Value: friendlyhub
+
+    PublicRoute:
+      Type: AWS::EC2::Route
+      DependsOn: AttachGateway
+      Properties:
+        RouteTableId: !Ref PublicRouteTable
+        DestinationCidrBlock: 0.0.0.0/0
+        GatewayId: !Ref InternetGateway
+
+    PublicSubnet1RouteAssoc:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        SubnetId: !Ref PublicSubnet1
+        RouteTableId: !Ref PublicRouteTable
+
+    PublicSubnet2RouteAssoc:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        SubnetId: !Ref PublicSubnet2
+        RouteTableId: !Ref PublicRouteTable
+
+    # ---- Security Groups ----
+    FargateSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: Security group for flat-manager on Fargate
+        VpcId: !Ref VPC
+        SecurityGroupIngress:
+          - IpProtocol: tcp
+            FromPort: 8080
+            ToPort: 8080
+            CidrIp: 0.0.0.0/0
+        SecurityGroupEgress:
+          - IpProtocol: "-1"
+            CidrIp: 0.0.0.0/0
+        Tags:
+          - Key: project
+            Value: friendlyhub
+
+    EFSSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: Security group for EFS
+        VpcId: !Ref VPC
+        SecurityGroupIngress:
+          - IpProtocol: tcp
+            FromPort: 2049
+            ToPort: 2049
+            SourceSecurityGroupId: !Ref FargateSecurityGroup
+        Tags:
+          - Key: project
+            Value: friendlyhub
+
+    # ---- EFS for flat-manager ----
+    EFSFileSystem:
+      Type: AWS::EFS::FileSystem
+      Properties:
+        Encrypted: true
+        PerformanceMode: generalPurpose
+        ThroughputMode: elastic
+        FileSystemTags:
+          - Key: project
+            Value: friendlyhub
+          - Key: Name
+            Value: friendlyhub-flatmanager-efs
+
+    EFSMountTarget1:
+      Type: AWS::EFS::MountTarget
+      Properties:
+        FileSystemId: !Ref EFSFileSystem
+        SubnetId: !Ref PublicSubnet1
+        SecurityGroups:
+          - !Ref EFSSecurityGroup
+
+    EFSMountTarget2:
+      Type: AWS::EFS::MountTarget
+      Properties:
+        FileSystemId: !Ref EFSFileSystem
+        SubnetId: !Ref PublicSubnet2
+        SecurityGroups:
+          - !Ref EFSSecurityGroup
+
+    # ---- S3 for OSTree repo + SPA ----
+    OstreeRepoBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        Tags:
+          - Key: project
+            Value: friendlyhub
+
+    SPABucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        WebsiteConfiguration:
+          IndexDocument: index.html
+          ErrorDocument: index.html
+        Tags:
+          - Key: project
+            Value: friendlyhub
+
+    # ---- ECS Cluster for flat-manager ----
+    ECSCluster:
+      Type: AWS::ECS::Cluster
+      Properties:
+        ClusterName: friendlyhub-${self:provider.stage}
+        Tags:
+          - Key: project
+            Value: friendlyhub
+
+    FlatManagerTaskRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: friendlyhub-flatmanager-task-${self:provider.stage}
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: ecs-tasks.amazonaws.com
+              Action: sts:AssumeRole
+        Policies:
+          - PolicyName: s3-sync
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - s3:PutObject
+                    - s3:GetObject
+                    - s3:ListBucket
+                    - s3:DeleteObject
+                  Resource:
+                    - !GetAtt OstreeRepoBucket.Arn
+                    - !Sub "${OstreeRepoBucket.Arn}/*"
+        Tags:
+          - Key: project
+            Value: friendlyhub
+
+    FlatManagerExecutionRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: friendlyhub-flatmanager-exec-${self:provider.stage}
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: ecs-tasks.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+        Policies:
+          - PolicyName: ssm-access
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - ssm:GetParameter
+                    - ssm:GetParameters
+                  Resource:
+                    - arn:aws:ssm:${self:provider.region}:*:parameter/friendlyhub/*
+        Tags:
+          - Key: project
+            Value: friendlyhub
+
+    FlatManagerTaskDefinition:
+      Type: AWS::ECS::TaskDefinition
+      Properties:
+        Family: friendlyhub-flatmanager-${self:provider.stage}
+        Cpu: "256"
+        Memory: "512"
+        NetworkMode: awsvpc
+        RequiresCompatibilities:
+          - FARGATE
+        ExecutionRoleArn: !GetAtt FlatManagerExecutionRole.Arn
+        TaskRoleArn: !GetAtt FlatManagerTaskRole.Arn
+        Volumes:
+          - Name: flatmanager-data
+            EFSVolumeConfiguration:
+              FilesystemId: !Ref EFSFileSystem
+              TransitEncryption: ENABLED
+        ContainerDefinitions:
+          - Name: flat-manager
+            Image: ghcr.io/flatpak/flat-manager:latest
+            Essential: true
+            PortMappings:
+              - ContainerPort: 8080
+                Protocol: tcp
+            MountPoints:
+              - SourceVolume: flatmanager-data
+                ContainerPath: /var/data/flatmanager
+            LogConfiguration:
+              LogDriver: awslogs
+              Options:
+                awslogs-group: !Ref FlatManagerLogGroup
+                awslogs-region: ${self:provider.region}
+                awslogs-stream-prefix: flat-manager
+        Tags:
+          - Key: project
+            Value: friendlyhub
+
+    FlatManagerService:
+      Type: AWS::ECS::Service
+      DependsOn:
+        - EFSMountTarget1
+        - EFSMountTarget2
+      Properties:
+        Cluster: !Ref ECSCluster
+        ServiceName: flat-manager
+        TaskDefinition: !Ref FlatManagerTaskDefinition
+        DesiredCount: 1
+        LaunchType: FARGATE
+        NetworkConfiguration:
+          AwsvpcConfiguration:
+            AssignPublicIp: ENABLED
+            SecurityGroups:
+              - !Ref FargateSecurityGroup
+            Subnets:
+              - !Ref PublicSubnet1
+              - !Ref PublicSubnet2
+        Tags:
+          - Key: project
+            Value: friendlyhub
+
+    FlatManagerLogGroup:
+      Type: AWS::Logs::LogGroup
+      Properties:
+        LogGroupName: !Sub "/friendlyhub/${Stage}/flat-manager" # noqa
+        RetentionInDays: 30
+        Tags:
+          - Key: project
+            Value: friendlyhub
+
+  Outputs:
+    ApiUrl:
+      Value: !Sub "https://${HttpApi}.execute-api.${self:provider.region}.amazonaws.com"
+    DynamoDBTableName:
+      Value: !Ref DynamoDBTable
+    EFSFileSystemId:
+      Value: !Ref EFSFileSystem
+    OstreeRepoBucket:
+      Value: !Ref OstreeRepoBucket
+    SPABucket:
+      Value: !Ref SPABucket
+    ECSCluster:
+      Value: !Ref ECSCluster

@@ -1,0 +1,108 @@
+# FriendlyHub Build Workflow
+# This workflow is placed in each app's repo under .github/workflows/build.yml
+# It can be triggered by:
+#   1. Push to main (after PR merge)
+#   2. workflow_dispatch from the FriendlyHub API
+#
+# The workflow builds the Flatpak, uploads it to flat-manager, and notifies
+# the FriendlyHub API via webhook.
+
+name: Build Flatpak
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      submission_id:
+        description: "FriendlyHub submission UUID"
+        required: true
+        type: string
+      app_id:
+        description: "Flatpak app ID (e.g. org.example.App)"
+        required: true
+        type: string
+      manifest_path:
+        description: "Path to the manifest file"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  build:
+    name: Build and Upload
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/friendlyhub/flatpak-builder:latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect manifest
+        id: detect
+        run: |
+          # Use the provided manifest path, or auto-detect
+          MANIFEST="${{ inputs.manifest_path }}"
+          if [ -z "${MANIFEST}" ]; then
+            # Look for common manifest filenames
+            for f in *.json *.yaml *.yml; do
+              if [ -f "$f" ] && grep -q '"app-id"\|"id"\|app-id:' "$f" 2>/dev/null; then
+                MANIFEST="$f"
+                break
+              fi
+            done
+          fi
+
+          if [ -z "${MANIFEST}" ] || [ ! -f "${MANIFEST}" ]; then
+            echo "ERROR: No Flatpak manifest found"
+            exit 1
+          fi
+
+          echo "manifest=${MANIFEST}" >> "$GITHUB_OUTPUT"
+
+          # Extract app-id from manifest
+          APP_ID="${{ inputs.app_id }}"
+          if [ -z "${APP_ID}" ]; then
+            # Try JSON
+            APP_ID=$(jq -r '.["app-id"] // .id // empty' "${MANIFEST}" 2>/dev/null || true)
+            # Try YAML if JSON failed
+            if [ -z "${APP_ID}" ]; then
+              APP_ID=$(grep -E '^(app-id|id):' "${MANIFEST}" | head -1 | sed 's/^[^:]*: *//' | tr -d '"' | tr -d "'")
+            fi
+          fi
+
+          echo "app_id=${APP_ID}" >> "$GITHUB_OUTPUT"
+          echo "Detected manifest: ${MANIFEST}"
+          echo "Detected app-id: ${APP_ID}"
+
+      - name: Build Flatpak
+        env:
+          MANIFEST_PATH: ${{ steps.detect.outputs.manifest }}
+          APP_ID: ${{ steps.detect.outputs.app_id }}
+          FLAT_MANAGER_URL: ${{ secrets.FLAT_MANAGER_URL }}
+          FLAT_MANAGER_TOKEN: ${{ secrets.FLAT_MANAGER_TOKEN }}
+          REPO_NAME: stable
+          FRIENDLYHUB_API_URL: ${{ secrets.FRIENDLYHUB_API_URL }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+          SUBMISSION_ID: ${{ inputs.submission_id || 'manual' }}
+        run: friendlyhub-build
+
+      - name: Notify failure
+        if: failure()
+        env:
+          FRIENDLYHUB_API_URL: ${{ secrets.FRIENDLYHUB_API_URL }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+          SUBMISSION_ID: ${{ inputs.submission_id }}
+        run: |
+          if [ -n "${SUBMISSION_ID}" ] && [ "${SUBMISSION_ID}" != "manual" ]; then
+            GHA_RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            curl -s -X POST "${FRIENDLYHUB_API_URL}/api/v1/webhooks/build-complete" \
+              -H "Content-Type: application/json" \
+              -H "x-webhook-secret: ${WEBHOOK_SECRET}" \
+              -d "{
+                \"submission_id\": \"${SUBMISSION_ID}\",
+                \"result\": \"failure\",
+                \"build_log_url\": \"${GHA_RUN_URL}\"
+              }"
+          fi

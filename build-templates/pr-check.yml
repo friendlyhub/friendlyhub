@@ -1,0 +1,212 @@
+# FriendlyHub PR Check Workflow
+# This workflow is placed in each app's repo under .github/workflows/pr-check.yml
+# It runs on pull requests to validate the Flatpak manifest before merge.
+#
+# On PR open/update: validates the manifest via the FriendlyHub API
+# On PR merge to main: creates a submission in FriendlyHub and triggers the build
+
+name: PR Check
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    name: Validate Manifest
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect manifest
+        id: detect
+        run: |
+          for f in *.json *.yaml *.yml; do
+            if [ -f "$f" ] && grep -qE '"app-id"|"id"|app-id:' "$f" 2>/dev/null; then
+              echo "manifest=$f" >> "$GITHUB_OUTPUT"
+              echo "Found manifest: $f"
+              break
+            fi
+          done
+
+      - name: Validate manifest
+        env:
+          FRIENDLYHUB_API_URL: ${{ secrets.FRIENDLYHUB_API_URL }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+        run: |
+          MANIFEST="${{ steps.detect.outputs.manifest }}"
+          if [ -z "${MANIFEST}" ]; then
+            echo "::error::No Flatpak manifest found in repository root"
+            exit 1
+          fi
+
+          echo "Validating ${MANIFEST}..."
+
+          # Convert YAML to JSON if needed, then validate via API
+          if [[ "${MANIFEST}" == *.yaml ]] || [[ "${MANIFEST}" == *.yml ]]; then
+            # Install yq for YAML->JSON conversion
+            sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+            sudo chmod +x /usr/local/bin/yq
+            MANIFEST_JSON=$(yq -o=json '.' "${MANIFEST}")
+          else
+            MANIFEST_JSON=$(cat "${MANIFEST}")
+          fi
+
+          # Call the FriendlyHub validation endpoint
+          # We use the webhook endpoint style (no user auth needed, uses shared secret)
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${FRIENDLYHUB_API_URL}/api/v1/manifests/validate" \
+            -H "Content-Type: application/json" \
+            -H "x-webhook-secret: ${WEBHOOK_SECRET}" \
+            -d "${MANIFEST_JSON}")
+
+          HTTP_CODE=$(echo "${RESPONSE}" | tail -1)
+          BODY=$(echo "${RESPONSE}" | sed '$d')
+
+          echo "API response (${HTTP_CODE}):"
+          echo "${BODY}" | jq . 2>/dev/null || echo "${BODY}"
+
+          if [ "${HTTP_CODE}" != "200" ]; then
+            echo "::error::Manifest validation failed"
+            exit 1
+          fi
+
+          # Check for errors in the response
+          VALID=$(echo "${BODY}" | jq -r '.valid')
+          if [ "${VALID}" != "true" ]; then
+            echo ""
+            echo "::error::Manifest has validation errors:"
+            echo "${BODY}" | jq -r '.errors[]' | while read -r err; do
+              echo "::error::  - ${err}"
+            done
+            exit 1
+          fi
+
+          # Show warnings (non-blocking)
+          WARNINGS=$(echo "${BODY}" | jq -r '.warnings[]' 2>/dev/null)
+          if [ -n "${WARNINGS}" ]; then
+            echo ""
+            echo "Warnings:"
+            echo "${WARNINGS}" | while read -r warn; do
+              echo "::warning::${warn}"
+            done
+          fi
+
+          echo ""
+          echo "Manifest is valid."
+
+  submit-and-build:
+    name: Submit and Build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect manifest and app-id
+        id: detect
+        run: |
+          for f in *.json *.yaml *.yml; do
+            if [ -f "$f" ] && grep -qE '"app-id"|"id"|app-id:' "$f" 2>/dev/null; then
+              echo "manifest=$f" >> "$GITHUB_OUTPUT"
+              break
+            fi
+          done
+
+          MANIFEST="${{ steps.detect.outputs.manifest || '' }}"
+          if [ -z "${MANIFEST}" ]; then
+            # Re-check with the found file
+            for f in *.json *.yaml *.yml; do
+              if [ -f "$f" ] && grep -qE '"app-id"|"id"|app-id:' "$f" 2>/dev/null; then
+                MANIFEST="$f"
+                break
+              fi
+            done
+          fi
+
+          # Extract app-id
+          APP_ID=$(jq -r '.["app-id"] // .id // empty' "${MANIFEST}" 2>/dev/null || true)
+          if [ -z "${APP_ID}" ]; then
+            APP_ID=$(grep -E '^(app-id|id):' "${MANIFEST}" | head -1 | sed 's/^[^:]*: *//' | tr -d '"' | tr -d "'")
+          fi
+
+          # Extract version from the commit message or manifest
+          VERSION=$(echo "${{ github.event.head_commit.message }}" | grep -oP 'v?\d+\.\d+[\.\d]*' | head -1 || true)
+          if [ -z "${VERSION}" ]; then
+            VERSION="0.0.0-$(echo ${{ github.sha }} | cut -c1-7)"
+          fi
+
+          echo "manifest=${MANIFEST}" >> "$GITHUB_OUTPUT"
+          echo "app_id=${APP_ID}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Create submission
+        id: submit
+        env:
+          FRIENDLYHUB_API_URL: ${{ secrets.FRIENDLYHUB_API_URL }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+        run: |
+          MANIFEST="${{ steps.detect.outputs.manifest }}"
+          APP_ID="${{ steps.detect.outputs.app_id }}"
+          VERSION="${{ steps.detect.outputs.version }}"
+
+          # Convert manifest to JSON if needed
+          if [[ "${MANIFEST}" == *.yaml ]] || [[ "${MANIFEST}" == *.yml ]]; then
+            sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+            sudo chmod +x /usr/local/bin/yq
+            MANIFEST_JSON=$(yq -o=json '.' "${MANIFEST}")
+          else
+            MANIFEST_JSON=$(cat "${MANIFEST}")
+          fi
+
+          # Create the submission via webhook-authenticated endpoint
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${FRIENDLYHUB_API_URL}/api/v1/webhooks/submit" \
+            -H "Content-Type: application/json" \
+            -H "x-webhook-secret: ${WEBHOOK_SECRET}" \
+            -d "{
+              \"app_id\": \"${APP_ID}\",
+              \"version\": \"${VERSION}\",
+              \"manifest\": ${MANIFEST_JSON},
+              \"source_ref\": \"${{ github.sha }}\"
+            }")
+
+          HTTP_CODE=$(echo "${RESPONSE}" | tail -1)
+          BODY=$(echo "${RESPONSE}" | sed '$d')
+
+          echo "Submission response (${HTTP_CODE}):"
+          echo "${BODY}" | jq . 2>/dev/null || echo "${BODY}"
+
+          if [ "${HTTP_CODE}" != "200" ] && [ "${HTTP_CODE}" != "201" ]; then
+            echo "::error::Failed to create submission"
+            exit 1
+          fi
+
+          SUBMISSION_ID=$(echo "${BODY}" | jq -r '.id')
+          echo "submission_id=${SUBMISSION_ID}" >> "$GITHUB_OUTPUT"
+          echo "Created submission: ${SUBMISSION_ID}"
+
+      - name: Trigger build
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'build.yml',
+              ref: 'main',
+              inputs: {
+                submission_id: '${{ steps.submit.outputs.submission_id }}',
+                app_id: '${{ steps.detect.outputs.app_id }}',
+                manifest_path: '${{ steps.detect.outputs.manifest }}'
+              }
+            });
+            console.log('Build workflow triggered');

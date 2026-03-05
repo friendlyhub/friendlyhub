@@ -1,0 +1,48 @@
+use std::env;
+
+#[derive(Clone, Debug)]
+pub struct Config {
+    pub host: String,
+    pub port: u16,
+    pub dynamodb_table: String,
+    pub flat_manager_url: String,
+    pub flat_manager_token: String,
+    pub github_client_id: String,
+    pub github_client_secret: String,
+    pub github_org: String,
+    pub github_token: String,
+    pub jwt_secret: String,
+    pub frontend_url: String,
+}
+
+impl Config {
+    pub fn from_env() -> Self {
+        Self {
+            host: env::var("HOST").unwrap_or_else(|_| "0.0.0.0".into()),
+            port: env::var("PORT")
+                .unwrap_or_else(|_| "3000".into())
+                .parse()
+                .expect("PORT must be a number"),
+            dynamodb_table: env::var("DYNAMODB_TABLE")
+                .unwrap_or_else(|_| "friendlyhub-dev".into()),
+            flat_manager_url: env::var("FLAT_MANAGER_URL")
+                .unwrap_or_else(|_| "http://localhost:8080".into()),
+            flat_manager_token: env::var("FLAT_MANAGER_TOKEN")
+                .unwrap_or_else(|_| "dev-token".into()),
+            github_client_id: env::var("GITHUB_CLIENT_ID")
+                .unwrap_or_else(|_| "dev-client-id".into()),
+            github_client_secret: env::var("GITHUB_CLIENT_SECRET")
+                .unwrap_or_else(|_| "dev-client-secret".into()),
+            github_org: env::var("GITHUB_ORG").unwrap_or_else(|_| "friendlyhub".into()),
+            github_token: env::var("GITHUB_TOKEN").unwrap_or_default(),
+            jwt_secret: env::var("JWT_SECRET")
+                .unwrap_or_else(|_| "dev-secret-change-me".into()),
+            frontend_url: env::var("FRONTEND_URL")
+                .unwrap_or_else(|_| "http://localhost:5173".into()),
+        }
+    }
+
+    pub fn listen_addr(&self) -> String {
+        format!("{}:{}", self.host, self.port)
+    }
+}
