@@ -83,8 +83,7 @@ echo ">>> flat-manager build ID: ${FM_BUILD_ID}"
 
 # Step 3: Upload the build to flat-manager
 echo ">>> Uploading to flat-manager..."
-flat-manager-client push \
-    --token "${FLAT_MANAGER_TOKEN}" \
+flat-manager-client --token "${FLAT_MANAGER_TOKEN}" push \
     "${FM_BUILD_REPO}" \
     "${REPO_DIR}"
 
