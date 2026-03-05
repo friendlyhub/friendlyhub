@@ -4,7 +4,7 @@
 # Based on Fedora for up-to-date flatpak tooling.
 # Pre-installs freedesktop + GNOME + KDE runtimes so builds don't re-download them every time.
 
-FROM fedora:41
+FROM fedora:43
 
 RUN dnf install -y \
     flatpak \
@@ -24,15 +24,21 @@ RUN flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flath
 RUN flatpak install -y --noninteractive flathub \
     org.freedesktop.Platform//24.08 \
     org.freedesktop.Sdk//24.08 \
-    org.gnome.Platform//47 \
-    org.gnome.Sdk//47 \
+    org.freedesktop.Platform//25.08 \
+    org.freedesktop.Sdk//25.08 \
+    org.gnome.Platform//48 \
+    org.gnome.Sdk//48 \
+    org.gnome.Platform//49 \
+    org.gnome.Sdk//49 \
     org.kde.Platform//6.8 \
-    org.kde.Sdk//6.8
+    org.kde.Sdk//6.8 \
+    org.kde.Platform//6.10 \
+    org.kde.Sdk//6.10
 
 # Install flat-manager-client for uploading builds
-# Build from source since there's no pre-built binary package
+# Built from the flat-manager repo (it's not a standalone crate)
 RUN dnf install -y cargo rust openssl-devel && \
-    cargo install flat-manager-client && \
+    cargo install --git https://github.com/flatpak/flat-manager.git flat-manager-client && \
     dnf remove -y cargo rust openssl-devel && \
     dnf clean all
 
