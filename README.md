@@ -1,2 +1,2 @@
 # friendlyhub
-A friendly place for flatpak app distribution
+A friendly place for flatpak app distribution. 
