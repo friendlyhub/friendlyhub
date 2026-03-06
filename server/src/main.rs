@@ -31,14 +31,18 @@ async fn main() {
 
     tracing::info!("Using DynamoDB table: {}", config.dynamodb_table);
 
+    let ecs_client = aws_sdk_ecs::Client::new(&aws_config);
+    let ec2_client = aws_sdk_ec2::Client::new(&aws_config);
+
     let flat_manager = FlatManagerClient::new(
-        &config.flat_manager_url,
         &config.flat_manager_token,
+        ecs_client.clone(),
+        ec2_client.clone(),
+        config.ecs_cluster.clone(),
+        config.ecs_service.clone(),
     );
 
     let github = GitHubService::new(&config.github_org, &config.github_token);
-    let ecs_client = aws_sdk_ecs::Client::new(&aws_config);
-    let ec2_client = aws_sdk_ec2::Client::new(&aws_config);
 
     let state = AppState {
         db,

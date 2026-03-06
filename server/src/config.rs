@@ -5,8 +5,8 @@ pub struct Config {
     pub host: String,
     pub port: u16,
     pub dynamodb_table: String,
-    pub flat_manager_url: String,
     pub flat_manager_token: String,
+    pub flat_manager_webhook_secret: String,
     pub github_client_id: String,
     pub github_client_secret: String,
     pub github_org: String,
@@ -27,10 +27,10 @@ impl Config {
                 .expect("PORT must be a number"),
             dynamodb_table: env::var("DYNAMODB_TABLE")
                 .unwrap_or_else(|_| "friendlyhub-dev".into()),
-            flat_manager_url: env::var("FLAT_MANAGER_URL")
-                .unwrap_or_else(|_| "http://localhost:8080".into()),
             flat_manager_token: env::var("FLAT_MANAGER_TOKEN")
                 .unwrap_or_else(|_| "dev-token".into()),
+            flat_manager_webhook_secret: env::var("FLAT_MANAGER_WEBHOOK_SECRET")
+                .unwrap_or_else(|_| "dev-webhook-secret".into()),
             github_client_id: env::var("GITHUB_CLIENT_ID")
                 .unwrap_or_else(|_| "dev-client-id".into()),
             github_client_secret: env::var("GITHUB_CLIENT_SECRET")

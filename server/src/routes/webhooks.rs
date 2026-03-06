@@ -33,7 +33,7 @@ struct BuildCompletePayload {
 }
 
 fn verify_webhook_secret(headers: &HeaderMap, state: &AppState) -> Result<(), AppError> {
-    let expected = &state.config.flat_manager_token;
+    let expected = &state.config.flat_manager_webhook_secret;
     let provided = headers
         .get("x-webhook-secret")
         .and_then(|v| v.to_str().ok())

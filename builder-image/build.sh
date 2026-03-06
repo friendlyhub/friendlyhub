@@ -89,11 +89,34 @@ flat-manager-client --token "${FLAT_MANAGER_TOKEN}" push \
 
 # Step 4: Commit the build
 echo ">>> Committing build..."
-curl -s -X POST \
+COMMIT_RESPONSE=$(curl -s -X POST \
     "${FLAT_MANAGER_URL}/api/v1/build/${FM_BUILD_ID}/commit" \
-    -H "Authorization: Bearer ${FLAT_MANAGER_TOKEN}"
+    -H "Authorization: Bearer ${FLAT_MANAGER_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d '{}')
 
-echo ">>> Build committed successfully."
+echo ">>> Commit response: ${COMMIT_RESPONSE}"
+
+# Wait for commit to finish processing
+echo ">>> Waiting for commit to complete..."
+for i in $(seq 1 30); do
+    BUILD_STATE=$(curl -s \
+        "${FLAT_MANAGER_URL}/api/v1/build/${FM_BUILD_ID}" \
+        -H "Authorization: Bearer ${FLAT_MANAGER_TOKEN}" | jq -r '.repo_state')
+    if [ "${BUILD_STATE}" = "1" ]; then
+        echo ">>> Build committed successfully."
+        break
+    elif [ "${BUILD_STATE}" = "3" ]; then
+        echo "ERROR: Commit failed (repo_state=3)"
+        exit 1
+    fi
+    sleep 2
+done
+
+if [ "${BUILD_STATE}" != "1" ]; then
+    echo "ERROR: Commit did not complete in time (repo_state=${BUILD_STATE})"
+    exit 1
+fi
 
 # Step 5: Notify FriendlyHub API
 echo ">>> Notifying FriendlyHub..."

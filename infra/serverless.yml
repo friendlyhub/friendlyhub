@@ -12,8 +12,8 @@ provider:
     project: friendlyhub
   environment:
     DYNAMODB_TABLE: !Ref DynamoDBTable
-    FLAT_MANAGER_URL: ${ssm:/friendlyhub/${self:provider.stage}/flat-manager-url, 'placeholder'}
-    FLAT_MANAGER_TOKEN: ${ssm:/friendlyhub/${self:provider.stage}/flat-manager-token, 'placeholder'}
+    FLAT_MANAGER_TOKEN: ${ssm:/friendlyhub/${self:provider.stage}/flat-manager-jwt}
+    FLAT_MANAGER_WEBHOOK_SECRET: ${ssm:/friendlyhub/${self:provider.stage}/flat-manager-token, 'placeholder'}
     GITHUB_CLIENT_ID: ${ssm:/friendlyhub/${self:provider.stage}/github-client-id, 'placeholder'}
     GITHUB_CLIENT_SECRET: ${ssm:/friendlyhub/${self:provider.stage}/github-client-secret, 'placeholder'}
     GITHUB_ORG: friendlyhub
