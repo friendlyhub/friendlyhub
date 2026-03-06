@@ -10,6 +10,10 @@ provider:
     project: friendlyhub
   tags:
     project: friendlyhub
+  httpApi:
+    throttle:
+      burstLimit: 100
+      rateLimit: 50
   environment:
     DYNAMODB_TABLE: !Ref DynamoDBTable
     FLAT_MANAGER_TOKEN: ${ssm:/friendlyhub/${self:provider.stage}/flat-manager-jwt}
@@ -444,6 +448,11 @@ resources:
                   Resource:
                     - !GetAtt OstreeRepoBucket.Arn
                     - !Sub "${OstreeRepoBucket.Arn}/*"
+                - Effect: Allow
+                  Action:
+                    - cloudfront:CreateInvalidation
+                  Resource:
+                    - !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${OstreeRepoCDN}"
         Tags:
           - Key: project
             Value: friendlyhub
@@ -534,13 +543,21 @@ resources:
               - |
                 while true; do
                   echo "Starting S3 sync..."
-                  aws s3 sync /var/data/flatmanager/repo "s3://${BUCKET}/repo" --delete --exclude "friendlyhub.flatpakrepo" --no-progress 2>&1
-                  echo "Sync complete, sleeping 60s"
+                  SYNC_OUT=$(aws s3 sync /var/data/flatmanager/repo "s3://${BUCKET}/repo" --delete --exclude "friendlyhub.flatpakrepo" 2>&1)
+                  if echo "$SYNC_OUT" | grep -q "upload:\|delete:"; then
+                    echo "Changes detected, invalidating CloudFront cache..."
+                    aws cloudfront create-invalidation --distribution-id "${CF_DISTRIBUTION}" --paths "/repo/summary" "/repo/summary.idx" "/repo/appstream/*" --no-cli-pager 2>&1
+                    echo "Invalidation requested"
+                  else
+                    echo "No changes"
+                  fi
                   sleep 60
                 done
             Environment:
               - Name: BUCKET
                 Value: !Ref OstreeRepoBucket
+              - Name: CF_DISTRIBUTION
+                Value: !Ref OstreeRepoCDN
             MountPoints:
               - SourceVolume: flatmanager-data
                 ContainerPath: /var/data/flatmanager
