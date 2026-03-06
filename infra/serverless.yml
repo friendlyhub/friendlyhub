@@ -225,7 +225,7 @@ resources:
         SecurityGroupIngress:
           - IpProtocol: tcp
             FromPort: 8080
-            ToPort: 8080
+            ToPort: 8081
             CidrIp: 0.0.0.0/0
         SecurityGroupEgress:
           - IpProtocol: "-1"
@@ -508,6 +508,8 @@ resources:
             PortMappings:
               - ContainerPort: 8080
                 Protocol: tcp
+              - ContainerPort: 8081
+                Protocol: tcp
             Environment:
               - Name: DATABASE_URL
                 Value: !Sub
@@ -524,6 +526,8 @@ resources:
                 Value: "1"
               - Name: GPG_PRIVATE_KEY
                 Value: ${ssm:/friendlyhub/${self:provider.stage}/gpg-private-key}
+              - Name: PURGE_TOKEN
+                Value: ${ssm:/friendlyhub/${self:provider.stage}/flat-manager-jwt}
             MountPoints:
               - SourceVolume: flatmanager-data
                 ContainerPath: /var/data/flatmanager

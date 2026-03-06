@@ -188,6 +188,32 @@ impl FlatManagerClient {
         Ok(())
     }
 
+    /// Purge an app's OSTree refs from the repo (called on app delete).
+    /// Hits the purge-server sidecar on port 8081.
+    pub async fn purge_app(&self, app_id: &str) -> Result<(), AppError> {
+        let base_url = self.base_url().await?;
+        // Replace port 8080 with 8081 for the purge server
+        let purge_url = base_url.replace(":8080", ":8081");
+        let resp = self
+            .client
+            .post(format!("{purge_url}/purge"))
+            .bearer_auth(&self.token)
+            .json(&serde_json::json!({ "app_id": app_id }))
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("purge-server call failed: {e}")))?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(AppError::Internal(format!(
+                "purge-server returned {status}: {body}"
+            )));
+        }
+
+        Ok(())
+    }
+
     /// Publish a committed build to the public repository.
     pub async fn publish_build(&self, build_id: i32) -> Result<(), AppError> {
         let base_url = self.base_url().await?;

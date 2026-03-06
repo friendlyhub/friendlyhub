@@ -7,6 +7,7 @@ FROM ghcr.io/flatpak/flat-manager:latest
 RUN apt-get update && apt-get install -y openssl gnupg && rm -rf /var/lib/apt/lists/*
 
 COPY entrypoint.sh /entrypoint.sh
+COPY purge-server.py /purge-server.py
 RUN chmod +x /entrypoint.sh
 
 WORKDIR /

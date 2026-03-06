@@ -163,5 +163,10 @@ async fn delete_app(
         tracing::warn!("Failed to delete GitHub repo {}: {e}", a.app_id);
     }
 
+    // Purge OSTree refs (best-effort)
+    if let Err(e) = state.flat_manager.purge_app(&a.app_id).await {
+        tracing::warn!("Failed to purge OSTree refs for {}: {e}", a.app_id);
+    }
+
     Ok(Json(serde_json::json!({ "status": "deleted" })))
 }

@@ -97,6 +97,10 @@ fi
 
 echo "Data directory: ${DATA_DIR}"
 echo "Listening on port: ${FM_PORT}"
-echo "--- Starting flat-manager ---"
 
+# Start the purge server (handles OSTree ref deletion on app delete)
+echo "--- Starting purge server on port 8081 ---"
+python3 /purge-server.py &
+
+echo "--- Starting flat-manager ---"
 exec /usr/local/bin/flat-manager
