@@ -339,6 +339,77 @@ resources:
           - Key: project
             Value: friendlyhub
 
+    # ---- CloudFront for OSTree repo (dl.friendlyhub.org) ----
+    OstreeRepoOAC:
+      Type: AWS::CloudFront::OriginAccessControl
+      Properties:
+        OriginAccessControlConfig:
+          Name: friendlyhub-ostree-oac-${self:provider.stage}
+          OriginAccessControlOriginType: s3
+          SigningBehavior: always
+          SigningProtocol: sigv4
+
+    OstreeRepoBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref OstreeRepoBucket
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: cloudfront.amazonaws.com
+              Action: s3:GetObject
+              Resource: !Sub "${OstreeRepoBucket.Arn}/*"
+              Condition:
+                StringEquals:
+                  AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${OstreeRepoCDN}"
+
+    OstreeRepoCDN:
+      Type: AWS::CloudFront::Distribution
+      Properties:
+        DistributionConfig:
+          Enabled: true
+          Comment: FriendlyHub OSTree repo (${self:provider.stage})
+          Aliases:
+            - dl.friendlyhub.org
+          ViewerCertificate:
+            AcmCertificateArn: arn:aws:acm:us-east-1:781345700122:certificate/c2a6b305-fda0-4232-bfee-cee6cb254495
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          DefaultCacheBehavior:
+            TargetOriginId: ostree-s3
+            ViewerProtocolPolicy: redirect-to-https
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # CachingOptimized
+            Compress: true
+            AllowedMethods:
+              - GET
+              - HEAD
+            CachedMethods:
+              - GET
+              - HEAD
+          Origins:
+            - Id: ostree-s3
+              DomainName: !GetAtt OstreeRepoBucket.RegionalDomainName
+              OriginAccessControlId: !Ref OstreeRepoOAC
+              S3OriginConfig:
+                OriginAccessIdentity: ""
+          HttpVersion: http2and3
+          PriceClass: PriceClass_100
+        Tags:
+          - Key: project
+            Value: friendlyhub
+
+    OstreeRepoDNS:
+      Type: AWS::Route53::RecordSet
+      Properties:
+        HostedZoneId: Z00857191ZKUMZMPEZ30A
+        Name: dl.friendlyhub.org
+        Type: A
+        AliasTarget:
+          HostedZoneId: Z2FDTNDATAQYW2  # CloudFront global hosted zone ID
+          DNSName: !GetAtt OstreeRepoCDN.DomainName
+
     # ---- ECS Cluster for flat-manager ----
     ECSCluster:
       Type: AWS::ECS::Cluster
@@ -442,6 +513,8 @@ resources:
                 Value: /var/data/flatmanager/config.json
               - Name: RUST_BACKTRACE
                 Value: "1"
+              - Name: GPG_PRIVATE_KEY
+                Value: ${ssm:/friendlyhub/${self:provider.stage}/gpg-private-key}
             MountPoints:
               - SourceVolume: flatmanager-data
                 ContainerPath: /var/data/flatmanager
@@ -451,6 +524,33 @@ resources:
                 awslogs-group: !Ref FlatManagerLogGroup
                 awslogs-region: ${self:provider.region}
                 awslogs-stream-prefix: flat-manager
+          - Name: s3-sync
+            Image: public.ecr.aws/aws-cli/aws-cli:latest
+            Essential: false
+            EntryPoint:
+              - /bin/sh
+              - -c
+            Command:
+              - |
+                while true; do
+                  echo "Starting S3 sync..."
+                  aws s3 sync /var/data/flatmanager/repo "s3://${BUCKET}/repo" --delete --exclude "friendlyhub.flatpakrepo" --no-progress 2>&1
+                  echo "Sync complete, sleeping 60s"
+                  sleep 60
+                done
+            Environment:
+              - Name: BUCKET
+                Value: !Ref OstreeRepoBucket
+            MountPoints:
+              - SourceVolume: flatmanager-data
+                ContainerPath: /var/data/flatmanager
+                ReadOnly: true
+            LogConfiguration:
+              LogDriver: awslogs
+              Options:
+                awslogs-group: !Ref S3SyncLogGroup
+                awslogs-region: ${self:provider.region}
+                awslogs-stream-prefix: s3-sync
         Tags:
           - Key: project
             Value: friendlyhub
@@ -482,6 +582,15 @@ resources:
       Type: AWS::Logs::LogGroup
       Properties:
         LogGroupName: !Sub "/friendlyhub/${Stage}/flat-manager" # noqa
+        RetentionInDays: 30
+        Tags:
+          - Key: project
+            Value: friendlyhub
+
+    S3SyncLogGroup:
+      Type: AWS::Logs::LogGroup
+      Properties:
+        LogGroupName: !Sub "/friendlyhub/${Stage}/s3-sync" # noqa
         RetentionInDays: 30
         Tags:
           - Key: project

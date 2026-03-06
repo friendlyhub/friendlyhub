@@ -9,6 +9,8 @@ DB_URL="${DATABASE_URL:?DATABASE_URL must be set}"
 FM_SECRET="${FLAT_MANAGER_SECRET:-$(openssl rand -base64 32)}"
 FM_PORT="${FM_PORT:-8080}"
 CONFIG_PATH="${REPO_CONFIG:-${DATA_DIR}/config.json}"
+GPG_HOMEDIR="${DATA_DIR}/gpg"
+GPG_KEY_ID=""
 
 # Ensure repo directories exist
 mkdir -p "${DATA_DIR}/repo"
@@ -23,6 +25,18 @@ fi
 if [ ! -d "${DATA_DIR}/build-repo/objects" ]; then
     echo "Initializing OSTree build-repo at ${DATA_DIR}/build-repo..."
     ostree init --mode=archive-z2 --repo="${DATA_DIR}/build-repo"
+fi
+
+# Set up GPG key for OSTree signing
+if [ -n "${GPG_PRIVATE_KEY:-}" ]; then
+    echo "Importing GPG signing key..."
+    mkdir -p "${GPG_HOMEDIR}"
+    chmod 700 "${GPG_HOMEDIR}"
+    echo "${GPG_PRIVATE_KEY}" | gpg --homedir "${GPG_HOMEDIR}" --batch --import 2>&1
+    GPG_KEY_ID=$(gpg --homedir "${GPG_HOMEDIR}" --list-keys --keyid-format long --with-colons 2>/dev/null | grep '^pub' | head -1 | cut -d: -f5)
+    echo "GPG key imported: ${GPG_KEY_ID}"
+else
+    echo "WARNING: No GPG_PRIVATE_KEY set, OSTree repo will not be signed"
 fi
 
 # Encode secret safely (single line, no trailing newline)
@@ -60,8 +74,8 @@ cat > "${CONFIG_PATH}" <<EOF
     "delay-update-secs": 10,
     "database-url": "${SAFE_DB_URL}",
     "build-repo-base": "${DATA_DIR}/build-repo",
-    "build-gpg-key": null,
-    "gpg-homedir": null,
+    "build-gpg-key": $([ -n "${GPG_KEY_ID}" ] && echo "\"${GPG_KEY_ID}\"" || echo "null"),
+    "gpg-homedir": $([ -n "${GPG_KEY_ID}" ] && echo "\"${GPG_HOMEDIR}\"" || echo "null"),
     "secret": "${SAFE_SECRET}"
 }
 EOF
