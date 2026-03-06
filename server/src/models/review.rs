@@ -73,6 +73,18 @@ pub async fn create(
     Ok(rev)
 }
 
+pub async fn delete(db: &Db, submission_id: Uuid, review_id: Uuid) -> Result<(), AppError> {
+    db.client
+        .delete_item()
+        .table_name(&db.table)
+        .key("PK", AttributeValue::S(format!("SUB#{submission_id}")))
+        .key("SK", AttributeValue::S(format!("REV#{review_id}")))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("DynamoDB delete_item failed: {e}")))?;
+    Ok(())
+}
+
 pub async fn list_by_submission(db: &Db, submission_id: Uuid) -> Result<Vec<Review>, AppError> {
     let result = db
         .client

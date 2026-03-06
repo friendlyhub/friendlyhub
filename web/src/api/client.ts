@@ -75,6 +75,12 @@ export const updateApp = (
     body: JSON.stringify(data),
   });
 
+export const deleteApp = (appId: string) =>
+  request<{ status: string }>(`/apps/${appId}`, { method: 'DELETE' });
+
+export const unpublishApp = (appId: string) =>
+  request<{ status: string }>(`/apps/${appId}/unpublish`, { method: 'POST' });
+
 // Submissions
 export const submitApp = (
   appId: string,

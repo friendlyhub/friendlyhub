@@ -250,6 +250,36 @@ impl GitHubService {
         Ok(body.workflow_runs.into_iter().next())
     }
 
+    /// Delete a repository from the org.
+    pub async fn delete_repo(&self, repo: &str) -> Result<(), AppError> {
+        let url = format!("https://api.github.com/repos/{}/{repo}", self.org);
+
+        let resp = self
+            .client
+            .delete(&url)
+            .header("User-Agent", "friendlyhub-api")
+            .header("Accept", "application/vnd.github+json")
+            .bearer_auth(&self.token)
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("GitHub API call failed: {e}")))?;
+
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            // Repo already gone, that's fine
+            return Ok(());
+        }
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(AppError::Internal(format!(
+                "GitHub delete repo returned {status}: {body}"
+            )));
+        }
+
+        Ok(())
+    }
+
     /// Check if a repository exists in the org.
     pub async fn repo_exists(&self, repo: &str) -> Result<bool, AppError> {
         let url = format!("https://api.github.com/repos/{}/{repo}", self.org);

@@ -424,6 +424,19 @@ pub async fn update_from_metainfo(
     Ok(())
 }
 
+pub async fn delete(db: &Db, id: Uuid) -> Result<(), AppError> {
+    let key = format!("APP#{id}");
+    db.client
+        .delete_item()
+        .table_name(&db.table)
+        .key("PK", AttributeValue::S(key.clone()))
+        .key("SK", AttributeValue::S(key))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("DynamoDB delete_item failed: {e}")))?;
+    Ok(())
+}
+
 pub async fn set_published(db: &Db, id: Uuid, published: bool) -> Result<(), AppError> {
     let mut app = find_by_id(db, id)
         .await?

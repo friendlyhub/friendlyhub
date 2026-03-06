@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
 use crate::errors::AppError;
-use crate::models::app::{self, AppResponse, CreateApp, UpdateApp};
+use crate::models::{app::{self, AppResponse, CreateApp, UpdateApp}, review, submission};
 use crate::router::AppState;
 
 pub fn routes() -> Router<AppState> {
@@ -16,7 +16,8 @@ pub fn routes() -> Router<AppState> {
         .route("/apps", get(list_apps).post(create_app))
         .route("/apps/mine", get(my_apps))
         .route("/apps/by-owner/{owner_id}", get(apps_by_owner))
-        .route("/apps/{app_id}", get(get_app).put(update_app))
+        .route("/apps/{app_id}", get(get_app).put(update_app).delete(delete_app))
+        .route("/apps/{app_id}/unpublish", axum::routing::post(unpublish_app))
 }
 
 #[derive(Deserialize)]
@@ -111,4 +112,56 @@ async fn my_apps(
     let apps = app::list_by_owner(&state.db, auth.user_id).await?;
     let responses: Vec<AppResponse> = apps.into_iter().map(AppResponse::from).collect();
     Ok(Json(responses))
+}
+
+async fn unpublish_app(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(app_id): Path<String>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let a = app::find_by_app_id(&state.db, &app_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("App not found".into()))?;
+
+    if a.owner_id != auth.user_id && auth.role != "admin" {
+        return Err(AppError::Forbidden);
+    }
+
+    app::set_published(&state.db, a.id, false).await?;
+
+    Ok(Json(serde_json::json!({ "status": "unpublished" })))
+}
+
+async fn delete_app(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(app_id): Path<String>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let a = app::find_by_app_id(&state.db, &app_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("App not found".into()))?;
+
+    if a.owner_id != auth.user_id && auth.role != "admin" {
+        return Err(AppError::Forbidden);
+    }
+
+    // Delete all submissions and their reviews
+    let submissions = submission::list_by_app(&state.db, a.id).await?;
+    for sub in &submissions {
+        let reviews = review::list_by_submission(&state.db, sub.id).await?;
+        for rev in &reviews {
+            review::delete(&state.db, sub.id, rev.id).await?;
+        }
+        submission::delete(&state.db, sub.id).await?;
+    }
+
+    // Delete the app record
+    app::delete(&state.db, a.id).await?;
+
+    // Delete the GitHub repo (best-effort, don't fail the whole operation)
+    if let Err(e) = state.github.delete_repo(&a.app_id).await {
+        tracing::warn!("Failed to delete GitHub repo {}: {e}", a.app_id);
+    }
+
+    Ok(Json(serde_json::json!({ "status": "deleted" })))
 }

@@ -252,6 +252,19 @@ pub async fn set_fm_build_id(db: &Db, id: Uuid, fm_build_id: i32) -> Result<(), 
     save(db, &sub).await
 }
 
+pub async fn delete(db: &Db, id: Uuid) -> Result<(), AppError> {
+    let key = format!("SUB#{id}");
+    db.client
+        .delete_item()
+        .table_name(&db.table)
+        .key("PK", AttributeValue::S(key.clone()))
+        .key("SK", AttributeValue::S(key))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("DynamoDB delete_item failed: {e}")))?;
+    Ok(())
+}
+
 pub async fn set_build_log_url(db: &Db, id: Uuid, url: &str) -> Result<(), AppError> {
     let mut sub = find_by_id(db, id)
         .await?
