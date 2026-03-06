@@ -103,7 +103,13 @@ jobs:
 
   submit-and-build:
     name: Submit and Build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Only run for direct pushes/PR merges to main, NOT for commits pushed by the
+    # FriendlyHub API (web submissions). API commits include a [friendlyhub-api]
+    # tag, so we skip those to avoid creating duplicate submissions.
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      !contains(github.event.head_commit.message, '[friendlyhub-api]')
     runs-on: ubuntu-latest
 
     steps:

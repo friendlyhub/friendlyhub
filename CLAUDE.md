@@ -17,13 +17,13 @@ Monorepo with the following components:
 
 ## Tech Stack
 
-- **Backend:** Rust, Axum, sqlx (async PostgreSQL)
+- **Backend:** Rust, Axum
 - **Frontend:** React 18+, TypeScript, Vite, Tailwind CSS, TanStack Query, Zustand
-- **Database:** PostgreSQL (Aurora Serverless v2). FriendlyHub uses the `friendlyhub` schema; flat-manager uses `public` schema in the same DB.
-- **Repo management:** flat-manager (separate Rust process, communicates via HTTP API)
+- **Database:** DynamoDB (single-table design) for FriendlyHub API; RDS PostgreSQL t4g.micro for flat-manager
+- **Repo management:** flat-manager (separate Rust process on ECS Fargate, communicates via HTTP API)
 - **Auth:** GitHub OAuth2 + JWT sessions
-- **Builds:** GitHub Actions with flatpak-builder
-- **Infrastructure:** AWS via Serverless Framework V4 — Lambda (API), ECS Fargate (flat-manager), Aurora Serverless v2, S3, CloudFront
+- **Builds:** GitHub Actions with custom flatpak-builder container image
+- **Infrastructure:** AWS via Serverless Framework V4 — Lambda (API), ECS Fargate (flat-manager), DynamoDB, RDS, EFS, S3, CloudFront
 - **Tagging:** All AWS resources must be tagged with `friendlyhub`
 
 ## Development
@@ -52,11 +52,10 @@ docker compose up  # PostgreSQL + flat-manager for local dev
 
 ## Conventions
 
-- Rust: use `sqlx` with compile-time checked queries, not Diesel
 - API routes under `/api/v1/`
-- Database migrations in `server/migrations/` using sqlx-cli
+- FriendlyHub API uses DynamoDB (single-table design, not PostgreSQL)
+- flat-manager uses RDS PostgreSQL (separate DB, not shared)
 - Frontend API client functions in `web/src/api/`
-- All FriendlyHub DB tables in the `friendlyhub` PostgreSQL schema
 - No emoji in code or docs unless explicitly requested
 
 ## GitHub Organization

@@ -142,7 +142,7 @@ async fn trigger_build(
             repo,
             &format!("{app_id}.json"),
             &manifest_str,
-            &format!("Update manifest for submission {submission_id}"),
+            &format!("[friendlyhub-api] Update manifest for submission {submission_id}"),
         )
         .await?;
 
@@ -159,7 +159,7 @@ async fn trigger_build(
                 repo,
                 safe_name,
                 content,
-                &format!("Update {safe_name} for submission {submission_id}"),
+                &format!("[friendlyhub-api] Update {safe_name} for submission {submission_id}"),
             )
             .await?;
     }
@@ -171,7 +171,7 @@ async fn trigger_build(
             repo,
             ".github/workflows/build.yml",
             BUILD_WORKFLOW_YAML,
-            "Add FriendlyHub build workflow",
+            "[friendlyhub-api] Add FriendlyHub build workflow",
         )
         .await?;
     state
@@ -180,7 +180,7 @@ async fn trigger_build(
             repo,
             ".github/workflows/pr-check.yml",
             PR_CHECK_WORKFLOW_YAML,
-            "Add FriendlyHub PR check workflow",
+            "[friendlyhub-api] Add FriendlyHub PR check workflow",
         )
         .await?;
 
