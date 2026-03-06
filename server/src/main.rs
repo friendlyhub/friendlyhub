@@ -33,6 +33,7 @@ async fn main() {
 
     let ecs_client = aws_sdk_ecs::Client::new(&aws_config);
     let ec2_client = aws_sdk_ec2::Client::new(&aws_config);
+    let s3_client = aws_sdk_s3::Client::new(&aws_config);
 
     let flat_manager = FlatManagerClient::new(
         &config.flat_manager_token,
@@ -51,6 +52,7 @@ async fn main() {
         github,
         ecs_client,
         ec2_client,
+        s3_client,
     };
 
     let app = build_router(state);

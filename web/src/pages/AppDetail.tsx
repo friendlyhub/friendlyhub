@@ -271,6 +271,14 @@ export default function AppDetail() {
                 {cat}
               </span>
             ))}
+            {app.keywords.map((kw) => (
+              <span
+                key={kw}
+                className="text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full"
+              >
+                {kw}
+              </span>
+            ))}
           </div>
         </div>
       </div>

@@ -8,6 +8,8 @@ aws-config = { version = "1", features = ["behavior-version-latest"] }
 aws-sdk-dynamodb = "1"
 aws-sdk-ec2 = "1"
 aws-sdk-ecs = "1"
+aws-sdk-s3 = "1"
+flate2 = "1"
 axum = { version = "0.8.8", features = ["macros"] }
 chrono = { version = "0.4.44", features = ["serde"] }
 dotenvy = "0.15.7"

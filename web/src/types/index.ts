@@ -42,6 +42,7 @@ export interface App {
   releases: Release[];
   branding: Branding | null;
   project_license: string | null;
+  keywords: string[];
   finish_args: string[];
   is_published: boolean;
   is_verified: boolean;

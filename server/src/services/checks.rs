@@ -74,6 +74,22 @@ pub struct CheckResultRow {
     pub details: Option<Value>,
 }
 
+/// Delete all check results for a submission.
+pub async fn delete_results(db: &Db, submission_id: Uuid) -> Result<(), AppError> {
+    let rows = get_results(db, submission_id).await?;
+    for row in &rows {
+        db.client
+            .delete_item()
+            .table_name(&db.table)
+            .key("PK", AttributeValue::S(format!("SUB#{submission_id}")))
+            .key("SK", AttributeValue::S(format!("CHK#{}", row.check_name)))
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("DynamoDB delete_item failed: {e}")))?;
+    }
+    Ok(())
+}
+
 /// Load check results for a submission.
 pub async fn get_results(db: &Db, submission_id: Uuid) -> Result<Vec<CheckResultRow>, AppError> {
     let result = db

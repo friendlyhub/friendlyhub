@@ -1,3 +1,4 @@
+pub mod appstream;
 pub mod checks;
 pub mod flat_manager;
 pub mod github;

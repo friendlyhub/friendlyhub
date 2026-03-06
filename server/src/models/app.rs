@@ -29,6 +29,7 @@ pub struct App {
     pub releases: Vec<Release>,
     pub branding: Option<Branding>,
     pub project_license: Option<String>,
+    pub keywords: Vec<String>,
     pub finish_args: Vec<String>,
     pub is_published: bool,
     pub is_verified: bool,
@@ -56,6 +57,7 @@ pub struct AppResponse {
     pub releases: Vec<Release>,
     pub branding: Option<Branding>,
     pub project_license: Option<String>,
+    pub keywords: Vec<String>,
     pub finish_args: Vec<String>,
     pub is_published: bool,
     pub is_verified: bool,
@@ -83,6 +85,7 @@ impl From<App> for AppResponse {
             releases: a.releases,
             branding: a.branding,
             project_license: a.project_license,
+            keywords: a.keywords,
             finish_args: a.finish_args,
             is_published: a.is_published,
             is_verified: a.is_verified,
@@ -98,8 +101,6 @@ pub struct CreateApp {
     pub summary: String,
     #[serde(default)]
     pub description: String,
-    #[serde(default)]
-    pub categories: Vec<String>,
     pub homepage_url: Option<String>,
     pub source_url: Option<String>,
     pub license: Option<String>,
@@ -110,7 +111,6 @@ pub struct UpdateApp {
     pub name: Option<String>,
     pub summary: Option<String>,
     pub description: Option<String>,
-    pub categories: Option<Vec<String>>,
     pub homepage_url: Option<String>,
     pub source_url: Option<String>,
     pub license: Option<String>,
@@ -173,6 +173,9 @@ impl App {
         if let Some(ref p) = self.project_license {
             item.insert("project_license".into(), AttributeValue::S(p.clone()));
         }
+        if !self.keywords.is_empty() {
+            item.insert("keywords".into(), helpers::string_list_to_av(&self.keywords));
+        }
         if !self.finish_args.is_empty() {
             item.insert("finish_args".into(), helpers::string_list_to_av(&self.finish_args));
         }
@@ -209,6 +212,7 @@ impl App {
             branding: helpers::get_string_opt(item, "branding")
                 .and_then(|s| serde_json::from_str(&s).ok()),
             project_license: helpers::get_string_opt(item, "project_license"),
+            keywords: helpers::get_string_list(item, "keywords"),
             finish_args: helpers::get_string_list(item, "finish_args"),
             is_published: helpers::get_bool(item, "is_published"),
             is_verified: helpers::get_bool(item, "is_verified"),
@@ -227,7 +231,7 @@ pub async fn create(db: &Db, owner_id: Uuid, input: &CreateApp) -> Result<App, A
         name: input.name.clone(),
         summary: input.summary.clone(),
         description: input.description.clone(),
-        categories: input.categories.clone(),
+        categories: Vec::new(),
         homepage_url: input.homepage_url.clone(),
         source_url: input.source_url.clone(),
         license: input.license.clone(),
@@ -239,6 +243,7 @@ pub async fn create(db: &Db, owner_id: Uuid, input: &CreateApp) -> Result<App, A
         releases: Vec::new(),
         branding: None,
         project_license: None,
+        keywords: Vec::new(),
         finish_args: Vec::new(),
         is_published: false,
         is_verified: false,
@@ -356,7 +361,6 @@ pub async fn update(db: &Db, id: Uuid, input: &UpdateApp) -> Result<App, AppErro
     if let Some(ref n) = input.name { app.name = n.clone(); }
     if let Some(ref s) = input.summary { app.summary = s.clone(); }
     if let Some(ref d) = input.description { app.description = d.clone(); }
-    if let Some(ref c) = input.categories { app.categories = c.clone(); }
     if let Some(ref h) = input.homepage_url { app.homepage_url = Some(h.clone()); }
     if let Some(ref s) = input.source_url { app.source_url = Some(s.clone()); }
     if let Some(ref l) = input.license { app.license = Some(l.clone()); }
@@ -411,6 +415,39 @@ pub async fn update_from_metainfo(
         app.source_url = Some(url.clone());
     }
 
+    app.updated_at = Utc::now();
+
+    db.client
+        .put_item()
+        .table_name(&db.table)
+        .set_item(Some(app.to_item()))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("DynamoDB put_item failed: {e}")))?;
+
+    Ok(())
+}
+
+pub async fn update_from_appstream(
+    db: &Db,
+    id: Uuid,
+    categories: Vec<String>,
+    keywords: Vec<String>,
+    icon_url: Option<String>,
+) -> Result<(), AppError> {
+    let mut app = find_by_id(db, id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("App not found".into()))?;
+
+    if !categories.is_empty() {
+        app.categories = categories;
+    }
+    if !keywords.is_empty() {
+        app.keywords = keywords;
+    }
+    if let Some(url) = icon_url {
+        app.icon_url = Some(url);
+    }
     app.updated_at = Utc::now();
 
     db.client

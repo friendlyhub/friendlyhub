@@ -10,6 +10,7 @@ use crate::auth::middleware::AuthUser;
 use crate::errors::AppError;
 use crate::models::{app::{self, AppResponse, CreateApp, UpdateApp}, review, submission};
 use crate::router::AppState;
+use crate::services::checks;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -152,6 +153,7 @@ async fn delete_app(
         for rev in &reviews {
             review::delete(&state.db, sub.id, rev.id).await?;
         }
+        checks::delete_results(&state.db, sub.id).await?;
         submission::delete(&state.db, sub.id).await?;
     }
 

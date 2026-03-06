@@ -17,6 +17,7 @@ pub struct AppState {
     pub github: GitHubService,
     pub ecs_client: aws_sdk_ecs::Client,
     pub ec2_client: aws_sdk_ec2::Client,
+    pub s3_client: aws_sdk_s3::Client,
 }
 
 pub fn build_router(state: AppState) -> Router {

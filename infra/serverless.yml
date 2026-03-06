@@ -26,6 +26,8 @@ provider:
     FRONTEND_URL: ${ssm:/friendlyhub/${self:provider.stage}/frontend-url, 'https://friendlyhub.org'}
     ECS_CLUSTER: !Ref ECSCluster
     ECS_SERVICE: flat-manager
+    REPO_S3_BUCKET: !Ref OstreeRepoBucket
+    REPO_CDN_URL: https://dl.friendlyhub.org
     RUST_LOG: info
   iam:
     role:
@@ -60,6 +62,11 @@ provider:
           Action:
             - ec2:DescribeNetworkInterfaces
           Resource: "*"
+        - Effect: Allow
+          Action:
+            - s3:GetObject
+          Resource:
+            - !Sub "${OstreeRepoBucket.Arn}/repo/appstream/*"
 
 package:
   artifact: .build/friendlyhub.zip
@@ -552,6 +559,8 @@ resources:
                     echo "Changes detected, invalidating CloudFront cache..."
                     aws cloudfront create-invalidation --distribution-id "${CF_DISTRIBUTION}" --paths "/repo/summary" "/repo/summary.idx" "/repo/appstream/*" --no-cli-pager 2>&1
                     echo "Invalidation requested"
+                    echo "Refreshing appstream metadata..."
+                    python3 -c "import urllib.request; r=urllib.request.urlopen(urllib.request.Request('${API_URL}/api/v1/internal/refresh-appstream', method='POST', data=b'')); print(f'HTTP {r.status}: {r.read().decode()}')" 2>&1 || echo "Appstream refresh failed (non-fatal)"
                   else
                     echo "No changes"
                   fi
@@ -562,6 +571,8 @@ resources:
                 Value: !Ref OstreeRepoBucket
               - Name: CF_DISTRIBUTION
                 Value: !Ref OstreeRepoCDN
+              - Name: API_URL
+                Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
             MountPoints:
               - SourceVolume: flatmanager-data
                 ContainerPath: /var/data/flatmanager

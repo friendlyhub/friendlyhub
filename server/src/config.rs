@@ -15,6 +15,8 @@ pub struct Config {
     pub frontend_url: String,
     pub ecs_cluster: String,
     pub ecs_service: String,
+    pub repo_s3_bucket: String,
+    pub repo_cdn_url: String,
 }
 
 impl Config {
@@ -45,6 +47,10 @@ impl Config {
                 .unwrap_or_else(|_| "friendlyhub-dev".into()),
             ecs_service: env::var("ECS_SERVICE")
                 .unwrap_or_else(|_| "flat-manager".into()),
+            repo_s3_bucket: env::var("REPO_S3_BUCKET")
+                .unwrap_or_else(|_| "friendlyhub-dev-ostreerepobucket-3tirz1kgdfla".into()),
+            repo_cdn_url: env::var("REPO_CDN_URL")
+                .unwrap_or_else(|_| "https://dl.friendlyhub.org".into()),
         }
     }
 

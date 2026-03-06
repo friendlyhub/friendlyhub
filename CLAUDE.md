@@ -6,7 +6,7 @@ A friendly alternative Flatpak repository at friendlyhub.org.
 
 Monorepo with the following components:
 
-- `server/` - Rust API server (Axum + sqlx)
+- `server/` - Rust API server (Axum + DynamoDB)
 - `web/` - React + TypeScript SPA (Vite + Tailwind)
 - `infra/` - Serverless Framework V4 (Lambda, API Gateway, Fargate, Aurora, S3, CloudFront)
 - `builder-image/` - Docker image for GitHub Actions builds

@@ -48,7 +48,6 @@ export const createApp = (data: {
   name: string;
   summary: string;
   description?: string;
-  categories?: string[];
   homepage_url?: string;
   source_url?: string;
   license?: string;
@@ -64,7 +63,6 @@ export const updateApp = (
     name: string;
     summary: string;
     description: string;
-    categories: string[];
     homepage_url: string;
     source_url: string;
     license: string;

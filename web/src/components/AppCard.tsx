@@ -8,9 +8,13 @@ export default function AppCard({ app }: { app: App }) {
       className="block bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md hover:border-gray-300 transition-all"
     >
       <div className="flex items-start gap-4">
-        <div className="w-14 h-14 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 font-bold text-lg shrink-0">
-          {app.name.charAt(0)}
-        </div>
+        {app.icon_url ? (
+          <img src={app.icon_url} alt="" className="w-14 h-14 rounded-xl shrink-0" />
+        ) : (
+          <div className="w-14 h-14 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 font-bold text-lg shrink-0">
+            {app.name.charAt(0)}
+          </div>
+        )}
         <div className="min-w-0">
           <h3 className="font-semibold text-gray-900 truncate">{app.name}</h3>
           <p className="text-sm text-gray-500 line-clamp-2 mt-1">{app.summary}</p>
