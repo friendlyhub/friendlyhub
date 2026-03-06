@@ -7,6 +7,7 @@ use uuid::Uuid;
 use super::helpers;
 use crate::db::Db;
 use crate::errors::AppError;
+use crate::services::metainfo::{Branding, MetainfoData, Release, Screenshot};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct App {
@@ -20,6 +21,15 @@ pub struct App {
     pub homepage_url: Option<String>,
     pub source_url: Option<String>,
     pub license: Option<String>,
+    pub developer_name: Option<String>,
+    pub icon_url: Option<String>,
+    pub bugtracker_url: Option<String>,
+    pub vcs_url: Option<String>,
+    pub screenshots: Vec<Screenshot>,
+    pub releases: Vec<Release>,
+    pub branding: Option<Branding>,
+    pub project_license: Option<String>,
+    pub finish_args: Vec<String>,
     pub is_published: bool,
     pub is_verified: bool,
     pub created_at: DateTime<Utc>,
@@ -38,6 +48,15 @@ pub struct AppResponse {
     pub homepage_url: Option<String>,
     pub source_url: Option<String>,
     pub license: Option<String>,
+    pub developer_name: Option<String>,
+    pub icon_url: Option<String>,
+    pub bugtracker_url: Option<String>,
+    pub vcs_url: Option<String>,
+    pub screenshots: Vec<Screenshot>,
+    pub releases: Vec<Release>,
+    pub branding: Option<Branding>,
+    pub project_license: Option<String>,
+    pub finish_args: Vec<String>,
     pub is_published: bool,
     pub is_verified: bool,
     pub created_at: DateTime<Utc>,
@@ -56,6 +75,15 @@ impl From<App> for AppResponse {
             homepage_url: a.homepage_url,
             source_url: a.source_url,
             license: a.license,
+            developer_name: a.developer_name,
+            icon_url: a.icon_url,
+            bugtracker_url: a.bugtracker_url,
+            vcs_url: a.vcs_url,
+            screenshots: a.screenshots,
+            releases: a.releases,
+            branding: a.branding,
+            project_license: a.project_license,
+            finish_args: a.finish_args,
             is_published: a.is_published,
             is_verified: a.is_verified,
             created_at: a.created_at,
@@ -115,6 +143,39 @@ impl App {
         if let Some(ref l) = self.license {
             item.insert("license".into(), AttributeValue::S(l.clone()));
         }
+        if let Some(ref d) = self.developer_name {
+            item.insert("developer_name".into(), AttributeValue::S(d.clone()));
+        }
+        if let Some(ref i) = self.icon_url {
+            item.insert("icon_url".into(), AttributeValue::S(i.clone()));
+        }
+        if let Some(ref b) = self.bugtracker_url {
+            item.insert("bugtracker_url".into(), AttributeValue::S(b.clone()));
+        }
+        if let Some(ref v) = self.vcs_url {
+            item.insert("vcs_url".into(), AttributeValue::S(v.clone()));
+        }
+        if !self.screenshots.is_empty() {
+            item.insert("screenshots".into(), AttributeValue::S(
+                serde_json::to_string(&self.screenshots).unwrap_or_default()
+            ));
+        }
+        if !self.releases.is_empty() {
+            item.insert("releases".into(), AttributeValue::S(
+                serde_json::to_string(&self.releases).unwrap_or_default()
+            ));
+        }
+        if let Some(ref b) = self.branding {
+            item.insert("branding".into(), AttributeValue::S(
+                serde_json::to_string(b).unwrap_or_default()
+            ));
+        }
+        if let Some(ref p) = self.project_license {
+            item.insert("project_license".into(), AttributeValue::S(p.clone()));
+        }
+        if !self.finish_args.is_empty() {
+            item.insert("finish_args".into(), helpers::string_list_to_av(&self.finish_args));
+        }
         item.insert("is_published".into(), AttributeValue::Bool(self.is_published));
         item.insert("is_verified".into(), AttributeValue::Bool(self.is_verified));
         item.insert("created_at".into(), AttributeValue::S(self.created_at.to_rfc3339()));
@@ -135,6 +196,20 @@ impl App {
             homepage_url: helpers::get_string_opt(item, "homepage_url"),
             source_url: helpers::get_string_opt(item, "source_url"),
             license: helpers::get_string_opt(item, "license"),
+            developer_name: helpers::get_string_opt(item, "developer_name"),
+            icon_url: helpers::get_string_opt(item, "icon_url"),
+            bugtracker_url: helpers::get_string_opt(item, "bugtracker_url"),
+            vcs_url: helpers::get_string_opt(item, "vcs_url"),
+            screenshots: helpers::get_string_opt(item, "screenshots")
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default(),
+            releases: helpers::get_string_opt(item, "releases")
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default(),
+            branding: helpers::get_string_opt(item, "branding")
+                .and_then(|s| serde_json::from_str(&s).ok()),
+            project_license: helpers::get_string_opt(item, "project_license"),
+            finish_args: helpers::get_string_list(item, "finish_args"),
             is_published: helpers::get_bool(item, "is_published"),
             is_verified: helpers::get_bool(item, "is_verified"),
             created_at: helpers::get_datetime(item, "created_at")?,
@@ -156,6 +231,15 @@ pub async fn create(db: &Db, owner_id: Uuid, input: &CreateApp) -> Result<App, A
         homepage_url: input.homepage_url.clone(),
         source_url: input.source_url.clone(),
         license: input.license.clone(),
+        developer_name: None,
+        icon_url: None,
+        bugtracker_url: None,
+        vcs_url: None,
+        screenshots: Vec::new(),
+        releases: Vec::new(),
+        branding: None,
+        project_license: None,
+        finish_args: Vec::new(),
         is_published: false,
         is_verified: false,
         created_at: now,
@@ -287,6 +371,57 @@ pub async fn update(db: &Db, id: Uuid, input: &UpdateApp) -> Result<App, AppErro
         .map_err(|e| AppError::Internal(format!("DynamoDB put_item failed: {e}")))?;
 
     Ok(app)
+}
+
+pub async fn update_from_metainfo(
+    db: &Db,
+    id: Uuid,
+    data: &MetainfoData,
+    finish_args: Vec<String>,
+) -> Result<(), AppError> {
+    let mut app = find_by_id(db, id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("App not found".into()))?;
+
+    if let Some(ref name) = data.name {
+        app.name = name.clone();
+    }
+    if let Some(ref summary) = data.summary {
+        app.summary = summary.clone();
+    }
+    if let Some(ref desc) = data.description {
+        app.description = desc.clone();
+    }
+    app.developer_name = data.developer_name.clone();
+    app.icon_url = data.icon_url.clone();
+    app.screenshots = data.screenshots.clone();
+    app.releases = data.releases.clone();
+    app.branding = data.branding.clone();
+    app.project_license = data.project_license.clone();
+    app.finish_args = finish_args;
+
+    if let Some(ref url) = data.homepage_url {
+        app.homepage_url = Some(url.clone());
+    }
+    if let Some(ref url) = data.bugtracker_url {
+        app.bugtracker_url = Some(url.clone());
+    }
+    if let Some(ref url) = data.vcs_url {
+        app.vcs_url = Some(url.clone());
+        app.source_url = Some(url.clone());
+    }
+
+    app.updated_at = Utc::now();
+
+    db.client
+        .put_item()
+        .table_name(&db.table)
+        .set_item(Some(app.to_item()))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("DynamoDB put_item failed: {e}")))?;
+
+    Ok(())
 }
 
 pub async fn set_published(db: &Db, id: Uuid, published: bool) -> Result<(), AppError> {

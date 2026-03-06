@@ -6,6 +6,23 @@ export interface User {
   role: string;
 }
 
+export interface Screenshot {
+  url: string;
+  caption: string | null;
+  is_default: boolean;
+}
+
+export interface Release {
+  version: string;
+  date: string | null;
+  description: string | null;
+}
+
+export interface Branding {
+  light_color: string | null;
+  dark_color: string | null;
+}
+
 export interface App {
   id: string;
   app_id: string;
@@ -17,6 +34,15 @@ export interface App {
   homepage_url: string | null;
   source_url: string | null;
   license: string | null;
+  developer_name: string | null;
+  icon_url: string | null;
+  bugtracker_url: string | null;
+  vcs_url: string | null;
+  screenshots: Screenshot[];
+  releases: Release[];
+  branding: Branding | null;
+  project_license: string | null;
+  finish_args: string[];
   is_published: boolean;
   is_verified: boolean;
   created_at: string;
@@ -28,6 +54,7 @@ export interface Submission {
   submitter_id: string;
   version: string;
   manifest: Record<string, unknown>;
+  metainfo: string | null;
   source_ref: string | null;
   status: string;
   gha_run_id: number | null;
@@ -54,8 +81,14 @@ export interface Review {
   created_at: string;
 }
 
+export interface ReviewAppInfo {
+  app_id: string;
+  name: string;
+}
+
 export interface ReviewDetail {
   submission: Submission;
   reviews: Review[];
   checks: CheckResult[];
+  app: ReviewAppInfo | null;
 }

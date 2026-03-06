@@ -92,6 +92,7 @@ async fn webhook_submit(
         found_app.owner_id,
         &payload.version,
         &payload.manifest,
+        None, // metainfo is already in the repo from the merged PR
     )
     .await?;
 

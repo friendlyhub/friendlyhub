@@ -12,7 +12,7 @@ use crate::auth::middleware::AuthUser;
 use crate::errors::AppError;
 use crate::models::{app, submission};
 use crate::router::AppState;
-use crate::services::manifest;
+use crate::services::{manifest, metainfo};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -26,6 +26,8 @@ pub fn routes() -> Router<AppState> {
 struct SubmitRequest {
     version: String,
     manifest: Value,
+    /// AppStream metainfo XML (required).
+    metainfo: String,
     /// Optional companion source files (e.g. cargo-sources.json, node-sources.json).
     /// Keys are filenames, values are file contents as strings.
     #[serde(default)]
@@ -67,6 +69,25 @@ async fn submit(
         }
     }
 
+    // Validate the metainfo XML
+    let metainfo_validation = metainfo::parse_and_validate(&input.metainfo);
+    if !metainfo_validation.valid {
+        return Err(AppError::BadRequest(format!(
+            "Invalid metainfo: {}",
+            metainfo_validation.errors.join("; ")
+        )));
+    }
+
+    // Check metainfo id matches the app
+    if let Some(ref metainfo_id) = metainfo_validation.data.id {
+        if metainfo_id != &app.app_id {
+            return Err(AppError::BadRequest(format!(
+                "Metainfo <id> '{}' does not match app '{}'",
+                metainfo_id, app.app_id
+            )));
+        }
+    }
+
     // Create the submission
     let sub = submission::create(
         &state.db,
@@ -74,11 +95,12 @@ async fn submit(
         auth.user_id,
         &input.version,
         &input.manifest,
+        Some(&input.metainfo),
     )
     .await?;
 
     // Push manifest to the app's GitHub repo and trigger a build
-    trigger_build(&state, &app.app_id, sub.id, &input.manifest, &input.source_files).await?;
+    trigger_build(&state, &app.app_id, sub.id, &input.manifest, &input.metainfo, &input.source_files).await?;
 
     Ok(Json(serde_json::json!({
         "id": sub.id,
@@ -122,6 +144,7 @@ async fn trigger_build(
     app_id: &str,
     submission_id: Uuid,
     manifest: &Value,
+    metainfo: &str,
     source_files: &HashMap<String, String>,
 ) -> Result<(), AppError> {
     // Ensure the repo exists in the org
@@ -143,6 +166,17 @@ async fn trigger_build(
             &format!("{app_id}.json"),
             &manifest_str,
             &format!("[friendlyhub-api] Update manifest for submission {submission_id}"),
+        )
+        .await?;
+
+    // Push the metainfo XML
+    state
+        .github
+        .put_file(
+            repo,
+            &format!("{app_id}.metainfo.xml"),
+            metainfo,
+            &format!("[friendlyhub-api] Update metainfo for submission {submission_id}"),
         )
         .await?;
 

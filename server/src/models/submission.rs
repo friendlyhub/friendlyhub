@@ -15,6 +15,7 @@ pub struct Submission {
     pub submitter_id: Uuid,
     pub version: String,
     pub manifest: serde_json::Value,
+    pub metainfo: Option<String>,
     pub source_ref: Option<String>,
     pub status: String,
     pub gha_run_id: Option<i64>,
@@ -60,6 +61,9 @@ impl Submission {
         item.insert("submitter_id".into(), AttributeValue::S(self.submitter_id.to_string()));
         item.insert("version".into(), AttributeValue::S(self.version.clone()));
         item.insert("manifest".into(), AttributeValue::S(self.manifest.to_string()));
+        if let Some(ref mi) = self.metainfo {
+            item.insert("metainfo".into(), AttributeValue::S(mi.clone()));
+        }
         if let Some(ref sr) = self.source_ref {
             item.insert("source_ref".into(), AttributeValue::S(sr.clone()));
         }
@@ -89,6 +93,7 @@ impl Submission {
             submitter_id: helpers::get_uuid(item, "submitter_id")?,
             version: helpers::get_string(item, "version")?,
             manifest: helpers::get_json(item, "manifest")?,
+            metainfo: helpers::get_string_opt(item, "metainfo"),
             source_ref: helpers::get_string_opt(item, "source_ref"),
             status: helpers::get_string(item, "status")?,
             gha_run_id: helpers::get_i64_opt(item, "gha_run_id"),
@@ -107,6 +112,7 @@ pub async fn create(
     submitter_id: Uuid,
     version: &str,
     manifest: &serde_json::Value,
+    metainfo: Option<&str>,
 ) -> Result<Submission, AppError> {
     let now = Utc::now();
     let sub = Submission {
@@ -115,6 +121,7 @@ pub async fn create(
         submitter_id,
         version: version.to_string(),
         manifest: manifest.clone(),
+        metainfo: metainfo.map(String::from),
         source_ref: None,
         status: "pending_build".to_string(),
         gha_run_id: None,

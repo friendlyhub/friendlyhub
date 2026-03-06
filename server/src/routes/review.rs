@@ -11,7 +11,7 @@ use crate::auth::middleware::ReviewerUser;
 use crate::errors::AppError;
 use crate::models::{app, review, submission};
 use crate::router::AppState;
-use crate::services::{checks, notifications};
+use crate::services::{checks, metainfo, notifications};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -43,10 +43,18 @@ async fn review_detail(
     let reviews = review::list_by_submission(&state.db, id).await?;
     let check_results = checks::get_results(&state.db, id).await?;
 
+    // Include app info so reviewers can see the app name and ID
+    let found_app = app::find_by_id(&state.db, sub.app_id).await?;
+    let app_info = found_app.map(|a| serde_json::json!({
+        "app_id": a.app_id,
+        "name": a.name,
+    }));
+
     Ok(Json(serde_json::json!({
         "submission": sub,
         "reviews": reviews,
         "checks": check_results,
+        "app": app_info,
     })))
 }
 
@@ -117,8 +125,29 @@ async fn review_decision(
     submission::update_status(&state.db, id, new_status).await?;
     notifications::notify_review_decision(id, &input.decision, &input.comment).await;
 
-    // If approved, publish via flat-manager
+    // If approved, publish via flat-manager and update app from metainfo
     if input.decision == "approved" {
+        // Extract finish-args from manifest for permissions display
+        let finish_args: Vec<String> = sub.manifest
+            .get("finish-args")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .unwrap_or_default();
+
+        // Update app metadata from metainfo if present
+        if let Some(ref metainfo_xml) = sub.metainfo {
+            let parsed = metainfo::parse_and_validate(metainfo_xml);
+            if parsed.valid {
+                if let Err(e) = app::update_from_metainfo(&state.db, sub.app_id, &parsed.data, finish_args).await {
+                    tracing::warn!(
+                        submission_id = %id,
+                        error = %e,
+                        "Failed to update app from metainfo"
+                    );
+                }
+            }
+        }
+
         if let Some(fm_build_id) = sub.fm_build_id {
             match state.flat_manager.publish_build(fm_build_id).await {
                 Ok(()) => {

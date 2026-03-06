@@ -28,14 +28,19 @@ export default function ReviewDetail() {
   if (isLoading) return <div className="text-center py-12 text-gray-500">Loading...</div>;
   if (!data) return null;
 
-  const { submission: sub, reviews, checks } = data;
+  const { submission: sub, reviews, checks, app: appInfo } = data;
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex items-center gap-4 mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Review: v{sub.version}</h1>
+        <h1 className="text-3xl font-bold text-gray-900">
+          Review: {appInfo?.name ?? 'Unknown App'} v{sub.version}
+        </h1>
         <StatusBadge status={sub.status} />
       </div>
+      {appInfo && (
+        <p className="text-sm text-gray-500 mb-6 font-mono">{appInfo.app_id}</p>
+      )}
 
       <div className="space-y-6">
         {/* Automated Checks */}

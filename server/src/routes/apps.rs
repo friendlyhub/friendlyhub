@@ -14,8 +14,9 @@ use crate::router::AppState;
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/apps", get(list_apps).post(create_app))
-        .route("/apps/{app_id}", get(get_app).put(update_app))
         .route("/apps/mine", get(my_apps))
+        .route("/apps/by-owner/{owner_id}", get(apps_by_owner))
+        .route("/apps/{app_id}", get(get_app).put(update_app))
 }
 
 #[derive(Deserialize)]
@@ -88,6 +89,19 @@ async fn update_app(
 
     let updated = app::update(&state.db, a.id, &input).await?;
     Ok(Json(AppResponse::from(updated)))
+}
+
+async fn apps_by_owner(
+    State(state): State<AppState>,
+    Path(owner_id): Path<Uuid>,
+) -> Result<Json<Vec<AppResponse>>, AppError> {
+    let apps = app::list_by_owner(&state.db, owner_id).await?;
+    let responses: Vec<AppResponse> = apps
+        .into_iter()
+        .filter(|a| a.is_published)
+        .map(AppResponse::from)
+        .collect();
+    Ok(Json(responses))
 }
 
 async fn my_apps(

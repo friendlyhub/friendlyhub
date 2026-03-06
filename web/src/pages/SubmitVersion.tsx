@@ -38,11 +38,46 @@ finish-args:
   - --socket=fallback-x11
   - --socket=wayland`;
 
+function exampleMetainfo(appId: string, name: string): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>${appId}</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>${name}</name>
+  <summary>A short summary of the app</summary>
+  <description>
+    <p>A longer description of what the app does.</p>
+  </description>
+  <developer id="com.example">
+    <name>Your Name</name>
+  </developer>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://example.com/screenshot.png</image>
+      <caption>Main window</caption>
+    </screenshot>
+  </screenshots>
+  <url type="homepage">https://example.com</url>
+  <url type="bugtracker">https://github.com/example/app/issues</url>
+  <url type="vcs-browser">https://github.com/example/app</url>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="1.0.0" date="2026-01-01">
+      <description>
+        <p>Initial release.</p>
+      </description>
+    </release>
+  </releases>
+</component>`;
+}
+
 export default function SubmitVersion() {
   const { appId } = useParams<{ appId: string }>();
   const navigate = useNavigate();
   const [version, setVersion] = useState('');
   const [manifestText, setManifestText] = useState('');
+  const [metainfoText, setMetainfoText] = useState('');
   const [parseError, setParseError] = useState<string | null>(null);
   const [sourceFiles, setSourceFiles] = useState<Record<string, string>>({});
 
@@ -56,13 +91,19 @@ export default function SubmitVersion() {
     mutationFn: () => {
       setParseError(null);
       const manifest = parseManifest(manifestText);
-      return submitApp(appId!, version, manifest, sourceFiles);
+      return submitApp(appId!, version, manifest, metainfoText, sourceFiles);
     },
     onSuccess: (result) => {
       navigate(`/my/submissions/${result.id}`);
     },
     onError: (err: Error) => {
-      if (err.message.includes('manifest') || err.message.includes('JSON') || err.message.includes('YAML')) {
+      if (
+        err.message.includes('manifest') ||
+        err.message.includes('metainfo') ||
+        err.message.includes('JSON') ||
+        err.message.includes('YAML') ||
+        err.message.includes('XML')
+      ) {
         setParseError(err.message);
       }
     },
@@ -98,7 +139,7 @@ export default function SubmitVersion() {
         Submit New Version
       </h1>
       <p className="text-gray-500 mb-8">
-        Submit a Flatpak manifest for{' '}
+        Submit a Flatpak manifest and metainfo for{' '}
         <span className="font-mono font-medium text-gray-700">
           {app.app_id}
         </span>{' '}
@@ -123,7 +164,8 @@ export default function SubmitVersion() {
         <div>
           <div className="flex justify-between items-center mb-1">
             <label className="block text-sm font-medium text-gray-700">
-              Flatpak Manifest (JSON or YAML) <span className="text-red-500">*</span>
+              Flatpak Manifest (JSON or YAML){' '}
+              <span className="text-red-500">*</span>
             </label>
             <button
               type="button"
@@ -132,7 +174,10 @@ export default function SubmitVersion() {
                   EXAMPLE_MANIFEST.replace(
                     'org.example.MyApp',
                     app.app_id,
-                  ).replace('myapp', app.name.toLowerCase().replace(/\s+/g, '')),
+                  ).replace(
+                    'myapp',
+                    app.name.toLowerCase().replace(/\s+/g, ''),
+                  ),
                 );
                 setParseError(null);
               }}
@@ -148,10 +193,72 @@ export default function SubmitVersion() {
               setManifestText(e.target.value);
               setParseError(null);
             }}
-            rows={20}
+            rows={16}
             placeholder="Paste your Flatpak manifest here (JSON or YAML)..."
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono leading-relaxed"
           />
+        </div>
+
+        <div>
+          <div className="flex justify-between items-center mb-1">
+            <label className="block text-sm font-medium text-gray-700">
+              AppStream Metainfo (XML) <span className="text-red-500">*</span>
+            </label>
+            <div className="flex gap-2">
+              <label className="text-xs text-emerald-600 hover:text-emerald-700 cursor-pointer">
+                Upload file
+                <input
+                  type="file"
+                  accept=".xml,.metainfo.xml"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      setMetainfoText(reader.result as string);
+                      setParseError(null);
+                    };
+                    reader.readAsText(file);
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setMetainfoText(exampleMetainfo(app.app_id, app.name));
+                  setParseError(null);
+                }}
+                className="text-xs text-emerald-600 hover:text-emerald-700"
+              >
+                Load example
+              </button>
+            </div>
+          </div>
+          <textarea
+            required
+            value={metainfoText}
+            onChange={(e) => {
+              setMetainfoText(e.target.value);
+              setParseError(null);
+            }}
+            rows={16}
+            placeholder={`Paste your AppStream metainfo XML here (${app.app_id}.metainfo.xml)...`}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono leading-relaxed"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            AppStream metainfo provides app metadata: name, description,
+            screenshots, changelog, developer info, and license. See the{' '}
+            <a
+              href="https://www.freedesktop.org/software/appstream/docs/chap-Metadata.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-emerald-600 hover:underline"
+            >
+              AppStream specification
+            </a>{' '}
+            for details.
+          </p>
           {parseError && (
             <p className="text-sm text-red-600 mt-1">{parseError}</p>
           )}

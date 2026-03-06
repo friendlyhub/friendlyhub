@@ -22,4 +22,5 @@ tokio = { version = "1.50.0", features = ["full"] }
 tower-http = { version = "0.6.8", features = ["cors", "compression-br", "trace"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+quick-xml = "0.37"
 uuid = { version = "1.21.0", features = ["v4", "serde"] }

@@ -37,6 +37,9 @@ export const listApps = (q?: string, limit = 50, offset = 0) => {
 
 export const getApp = (appId: string) => request<App>(`/apps/${appId}`);
 
+export const getAppsByOwner = (ownerId: string) =>
+  request<App[]>(`/apps/by-owner/${ownerId}`);
+
 // Apps (authenticated)
 export const getMyApps = () => request<App[]>('/apps/mine');
 
@@ -77,6 +80,7 @@ export const submitApp = (
   appId: string,
   version: string,
   manifest: unknown,
+  metainfo: string,
   sourceFiles?: Record<string, string>,
 ) =>
   request<{ id: string; status: string; version: string; warnings: string[] }>(
@@ -86,6 +90,7 @@ export const submitApp = (
       body: JSON.stringify({
         version,
         manifest,
+        metainfo,
         ...(sourceFiles && Object.keys(sourceFiles).length > 0
           ? { source_files: sourceFiles }
           : {}),
