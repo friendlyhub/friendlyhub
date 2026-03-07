@@ -16,6 +16,7 @@ pub struct User {
     pub email: Option<String>,
     pub avatar_url: Option<String>,
     pub role: String,
+    pub github_access_token: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -59,6 +60,9 @@ impl User {
             item.insert("avatar_url".into(), AttributeValue::S(a.clone()));
         }
         item.insert("role".into(), AttributeValue::S(self.role.clone()));
+        if let Some(ref t) = self.github_access_token {
+            item.insert("github_access_token".into(), AttributeValue::S(t.clone()));
+        }
         item.insert("created_at".into(), AttributeValue::S(self.created_at.to_rfc3339()));
         item.insert("updated_at".into(), AttributeValue::S(self.updated_at.to_rfc3339()));
         item.insert("entity_type".into(), AttributeValue::S("User".into()));
@@ -74,6 +78,7 @@ impl User {
             email: super::helpers::get_string_opt(item, "email"),
             avatar_url: super::helpers::get_string_opt(item, "avatar_url"),
             role: super::helpers::get_string(item, "role")?,
+            github_access_token: super::helpers::get_string_opt(item, "github_access_token"),
             created_at: super::helpers::get_datetime(item, "created_at")?,
             updated_at: super::helpers::get_datetime(item, "updated_at")?,
         })
@@ -87,6 +92,7 @@ pub async fn upsert_from_github(
     display_name: &str,
     email: Option<&str>,
     avatar_url: Option<&str>,
+    access_token: Option<&str>,
 ) -> Result<User, AppError> {
     let existing = find_by_github_id(db, github_id).await?;
     let now = Utc::now();
@@ -101,6 +107,9 @@ pub async fn upsert_from_github(
             if let Some(a) = avatar_url {
                 u.avatar_url = Some(a.to_string());
             }
+            if let Some(t) = access_token {
+                u.github_access_token = Some(t.to_string());
+            }
             u.updated_at = now;
             u
         }
@@ -112,6 +121,7 @@ pub async fn upsert_from_github(
             email: email.map(String::from),
             avatar_url: avatar_url.map(String::from),
             role: "developer".to_string(),
+            github_access_token: access_token.map(String::from),
             created_at: now,
             updated_at: now,
         },

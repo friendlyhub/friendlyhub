@@ -49,8 +49,21 @@ export interface App {
   install_count: number;
   is_published: boolean;
   is_verified: boolean;
+  developer_type: string | null;
+  original_app_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface VerificationInfo {
+  status: string;
+  domain: string | null;
+  token: string | null;
+  well_known_url: string | null;
+}
+
+export interface CreateAppResponse extends App {
+  verification: VerificationInfo | null;
 }
 
 export interface Submission {

@@ -1,14 +1,28 @@
-import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Package, FileText, ClipboardCheck, Menu, X } from 'lucide-react';
 import { useAuthStore } from '../stores/auth';
 
 export default function Layout() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate('/');
   };
+
+  const isDashboardRoute = location.pathname.startsWith('/my/') || location.pathname.startsWith('/review');
+
+  const sidebarLinks = [
+    { to: '/my/apps', label: 'My Apps', icon: Package },
+    { to: '/my/submissions', label: 'Submissions', icon: FileText },
+    ...((user?.role === 'reviewer' || user?.role === 'admin')
+      ? [{ to: '/review', label: 'Review Queue', icon: ClipboardCheck }]
+      : []),
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -29,26 +43,20 @@ export default function Layout() {
           <div className="flex items-center gap-4">
             {user ? (
               <>
+                {isDashboardRoute && (
+                  <button
+                    onClick={() => setSidebarOpen(!sidebarOpen)}
+                    className="lg:hidden text-gray-600 hover:text-gray-900"
+                  >
+                    {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                  </button>
+                )}
                 <Link
                   to="/my/apps"
                   className="text-gray-600 hover:text-gray-900 text-sm font-medium"
                 >
-                  My Apps
+                  Dashboard
                 </Link>
-                <Link
-                  to="/my/submissions"
-                  className="text-gray-600 hover:text-gray-900 text-sm font-medium"
-                >
-                  Submissions
-                </Link>
-                {(user.role === 'reviewer' || user.role === 'admin') && (
-                  <Link
-                    to="/review"
-                    className="text-gray-600 hover:text-gray-900 text-sm font-medium"
-                  >
-                    Review
-                  </Link>
-                )}
                 <div className="flex items-center gap-2 ml-2">
                   {user.avatar_url && (
                     <img
@@ -81,9 +89,54 @@ export default function Layout() {
         </nav>
       </header>
 
-      <main className="flex-1">
-        <Outlet />
-      </main>
+      {user && isDashboardRoute ? (
+        <div className="flex flex-1">
+          {/* Sidebar overlay for mobile */}
+          {sidebarOpen && (
+            <div
+              className="fixed inset-0 bg-black/30 z-40 lg:hidden"
+              onClick={() => setSidebarOpen(false)}
+            />
+          )}
+
+          {/* Sidebar */}
+          <aside
+            className={`fixed lg:static inset-y-0 left-0 z-50 w-56 bg-white border-r border-gray-200 pt-4 transform transition-transform lg:transform-none ${
+              sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+            }`}
+          >
+            <nav className="space-y-1 px-3">
+              {sidebarLinks.map(({ to, label, icon: Icon }) => {
+                const isActive = location.pathname.startsWith(to);
+                return (
+                  <Link
+                    key={to}
+                    to={to}
+                    onClick={() => setSidebarOpen(false)}
+                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    }`}
+                  >
+                    <Icon className={`w-4 h-4 ${isActive ? 'text-emerald-600' : 'text-gray-400'}`} />
+                    {label}
+                  </Link>
+                );
+              })}
+            </nav>
+          </aside>
+
+          {/* Main content */}
+          <main className="flex-1 min-w-0">
+            <Outlet />
+          </main>
+        </div>
+      ) : (
+        <main className="flex-1">
+          <Outlet />
+        </main>
+      )}
 
       <footer className="bg-white border-t border-gray-200 py-8 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

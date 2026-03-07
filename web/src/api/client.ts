@@ -1,4 +1,4 @@
-import type { App, CheckResult, ReviewDetail, Submission, User } from '../types';
+import type { App, CheckResult, CreateAppResponse, ReviewDetail, Submission, User } from '../types';
 
 const API_BASE = '/api/v1';
 
@@ -45,17 +45,27 @@ export const getMyApps = () => request<App[]>('/apps/mine');
 
 export const createApp = (data: {
   app_id: string;
-  name: string;
-  summary: string;
-  description?: string;
-  homepage_url?: string;
-  source_url?: string;
-  license?: string;
+  developer_type: string;
+  original_app_id?: string;
 }) =>
-  request<App>('/apps', {
+  request<CreateAppResponse>('/apps', {
     method: 'POST',
     body: JSON.stringify(data),
   });
+
+export const verifyDomain = (appId: string) =>
+  request<{ status: string; message?: string; token?: string }>(`/apps/${appId}/verify`, {
+    method: 'POST',
+  });
+
+export const checkDomainStatus = (domain: string) =>
+  request<{ domain: string; verified: boolean; token: string | null; well_known_url?: string }>(
+    '/apps/verification/check-domain',
+    {
+      method: 'POST',
+      body: JSON.stringify({ domain }),
+    },
+  );
 
 export const updateApp = (
   appId: string,

@@ -36,6 +36,8 @@ pub struct App {
     pub install_count: i64,
     pub is_published: bool,
     pub is_verified: bool,
+    pub developer_type: Option<String>,
+    pub original_app_id: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -67,6 +69,8 @@ pub struct AppResponse {
     pub install_count: i64,
     pub is_published: bool,
     pub is_verified: bool,
+    pub developer_type: Option<String>,
+    pub original_app_id: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -99,6 +103,8 @@ impl From<App> for AppResponse {
             install_count: a.install_count,
             is_published: a.is_published,
             is_verified: a.is_verified,
+            developer_type: a.developer_type,
+            original_app_id: a.original_app_id,
             created_at: a.created_at,
             updated_at: a.updated_at,
         }
@@ -108,13 +114,8 @@ impl From<App> for AppResponse {
 #[derive(Debug, Deserialize)]
 pub struct CreateApp {
     pub app_id: String,
-    pub name: String,
-    pub summary: String,
-    #[serde(default)]
-    pub description: String,
-    pub homepage_url: Option<String>,
-    pub source_url: Option<String>,
-    pub license: Option<String>,
+    pub developer_type: String,
+    pub original_app_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -199,6 +200,12 @@ impl App {
         item.insert("install_count".into(), AttributeValue::N(self.install_count.to_string()));
         item.insert("is_published".into(), AttributeValue::Bool(self.is_published));
         item.insert("is_verified".into(), AttributeValue::Bool(self.is_verified));
+        if let Some(ref dt) = self.developer_type {
+            item.insert("developer_type".into(), AttributeValue::S(dt.clone()));
+        }
+        if let Some(ref oai) = self.original_app_id {
+            item.insert("original_app_id".into(), AttributeValue::S(oai.clone()));
+        }
         item.insert("created_at".into(), AttributeValue::S(self.created_at.to_rfc3339()));
         item.insert("updated_at".into(), AttributeValue::S(self.updated_at.to_rfc3339()));
         item.insert("entity_type".into(), AttributeValue::S("App".into()));
@@ -237,25 +244,27 @@ impl App {
             install_count: helpers::get_i64_opt(item, "install_count").unwrap_or(0),
             is_published: helpers::get_bool(item, "is_published"),
             is_verified: helpers::get_bool(item, "is_verified"),
+            developer_type: helpers::get_string_opt(item, "developer_type"),
+            original_app_id: helpers::get_string_opt(item, "original_app_id"),
             created_at: helpers::get_datetime(item, "created_at")?,
             updated_at: helpers::get_datetime(item, "updated_at")?,
         })
     }
 }
 
-pub async fn create(db: &Db, owner_id: Uuid, input: &CreateApp) -> Result<App, AppError> {
+pub async fn create(db: &Db, owner_id: Uuid, input: &CreateApp, is_verified: bool) -> Result<App, AppError> {
     let now = Utc::now();
     let app = App {
         id: Uuid::new_v4(),
         app_id: input.app_id.clone(),
         owner_id,
-        name: input.name.clone(),
-        summary: input.summary.clone(),
-        description: input.description.clone(),
+        name: input.app_id.clone(),
+        summary: String::new(),
+        description: String::new(),
         categories: Vec::new(),
-        homepage_url: input.homepage_url.clone(),
-        source_url: input.source_url.clone(),
-        license: input.license.clone(),
+        homepage_url: None,
+        source_url: None,
+        license: None,
         developer_name: None,
         icon_url: None,
         bugtracker_url: None,
@@ -270,7 +279,9 @@ pub async fn create(db: &Db, owner_id: Uuid, input: &CreateApp) -> Result<App, A
         installed_size: None,
         install_count: 0,
         is_published: false,
-        is_verified: false,
+        is_verified: is_verified,
+        developer_type: Some(input.developer_type.clone()),
+        original_app_id: input.original_app_id.clone(),
         created_at: now,
         updated_at: now,
     };
@@ -375,6 +386,44 @@ pub async fn list_published(
     let mut apps: Vec<App> = result.items().iter().map(|item| App::from_item(item)).collect::<Result<Vec<_>, _>>()?;
     apps.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(apps)
+}
+
+pub async fn find_by_original_app_id(db: &Db, original_app_id: &str) -> Result<Option<App>, AppError> {
+    let result = db
+        .client
+        .scan()
+        .table_name(&db.table)
+        .filter_expression("entity_type = :et AND original_app_id = :oai")
+        .expression_attribute_values(":et", AttributeValue::S("App".into()))
+        .expression_attribute_values(":oai", AttributeValue::S(original_app_id.to_string()))
+        .limit(1)
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("DynamoDB scan failed: {e}")))?;
+
+    match result.items().first() {
+        Some(item) => Ok(Some(App::from_item(item)?)),
+        None => Ok(None),
+    }
+}
+
+pub async fn set_verified(db: &Db, id: Uuid, verified: bool) -> Result<(), AppError> {
+    let mut app = find_by_id(db, id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("App not found".into()))?;
+
+    app.is_verified = verified;
+    app.updated_at = Utc::now();
+
+    db.client
+        .put_item()
+        .table_name(&db.table)
+        .set_item(Some(app.to_item()))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("DynamoDB put_item failed: {e}")))?;
+
+    Ok(())
 }
 
 pub async fn update(db: &Db, id: Uuid, input: &UpdateApp) -> Result<App, AppError> {

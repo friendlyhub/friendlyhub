@@ -5,14 +5,14 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
 use crate::errors::AppError;
-use crate::models::{app::{self, AppResponse, CreateApp, UpdateApp}, review, submission};
+use crate::models::{app::{self, AppResponse, CreateApp, UpdateApp}, review, submission, user, verified_domain};
 use crate::router::AppState;
-use crate::services::checks;
+use crate::services::{checks, verification};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -22,6 +22,8 @@ pub fn routes() -> Router<AppState> {
         .route("/apps/{app_id}", get(get_app).put(update_app).delete(delete_app))
         .route("/apps/{app_id}/unpublish", axum::routing::post(unpublish_app))
         .route("/apps/{app_id}/flatpakref", get(get_flatpakref))
+        .route("/apps/{app_id}/verify", axum::routing::post(verify_domain))
+        .route("/apps/verification/check-domain", axum::routing::post(check_domain_status))
 }
 
 #[derive(Deserialize)]
@@ -58,24 +60,141 @@ async fn get_app(
     Ok(Json(AppResponse::from(a)))
 }
 
+#[derive(Debug, Serialize)]
+struct CreateAppResponse {
+    #[serde(flatten)]
+    app: AppResponse,
+    verification: Option<VerificationInfo>,
+}
+
+#[derive(Debug, Serialize)]
+struct VerificationInfo {
+    status: String,
+    domain: Option<String>,
+    token: Option<String>,
+    well_known_url: Option<String>,
+}
+
 async fn create_app(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(input): Json<CreateApp>,
-) -> Result<Json<AppResponse>, AppError> {
-    // Check app_id doesn't already exist
-    if app::find_by_app_id(&state.db, &input.app_id)
-        .await?
-        .is_some()
-    {
-        return Err(AppError::BadRequest(format!(
-            "App '{}' already exists",
-            input.app_id
-        )));
+) -> Result<Json<CreateAppResponse>, AppError> {
+    // Validate app ID format
+    verification::validate_app_id(&input.app_id)
+        .map_err(|e| AppError::BadRequest(e))?;
+
+    // Validate developer_type
+    if input.developer_type != "original" && input.developer_type != "third_party" {
+        return Err(AppError::BadRequest("developer_type must be 'original' or 'third_party'".into()));
     }
 
-    let a = app::create(&state.db, auth.user_id, &input).await?;
-    Ok(Json(AppResponse::from(a)))
+    // Check app_id doesn't already exist
+    if app::find_by_app_id(&state.db, &input.app_id).await?.is_some() {
+        return Err(AppError::BadRequest(format!("App '{}' already exists", input.app_id)));
+    }
+
+    // Third-party specific checks
+    if input.developer_type == "third_party" {
+        let original_app_id = input.original_app_id.as_deref()
+            .ok_or_else(|| AppError::BadRequest("original_app_id is required for third-party packages".into()))?;
+
+        verification::validate_app_id(original_app_id)
+            .map_err(|e| AppError::BadRequest(format!("Invalid original app ID: {e}")))?;
+
+        // Check no existing app with this app_id matches the original_app_id
+        if app::find_by_app_id(&state.db, original_app_id).await?.is_some() {
+            return Err(AppError::BadRequest(
+                "This app already exists on the platform. You cannot create a third-party package for it.".into()
+            ));
+        }
+
+        // Check no other third-party package exists for this original_app_id
+        if app::find_by_original_app_id(&state.db, original_app_id).await?.is_some() {
+            return Err(AppError::BadRequest(
+                "A third-party package for this app already exists on the platform.".into()
+            ));
+        }
+
+        // Also check the new app_id isn't someone else's original_app_id
+        if app::find_by_original_app_id(&state.db, &input.app_id).await?.is_some() {
+            return Err(AppError::BadRequest(format!("App ID '{}' conflicts with an existing package", input.app_id)));
+        }
+    }
+
+    // Original developer specific checks — determine verification status
+    let mut is_verified = false;
+    let mut verification_info: Option<VerificationInfo> = None;
+
+    if input.developer_type == "original" {
+        let db_user = user::find_by_id(&state.db, auth.user_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound("User not found".into()))?;
+
+        if let Some((_forge_domain, forge_user)) = verification::parse_forge_id(&input.app_id) {
+            // Forge-based ID: check username match or org ownership
+            if forge_user.to_lowercase() == db_user.github_login.to_lowercase() {
+                is_verified = true;
+                verification_info = Some(VerificationInfo {
+                    status: "verified".into(),
+                    domain: None,
+                    token: None,
+                    well_known_url: None,
+                });
+            } else {
+                // Check org ownership
+                let access_token = db_user.github_access_token.as_deref()
+                    .ok_or_else(|| AppError::BadRequest(
+                        "GitHub access token not available. Please log out and log in again.".into()
+                    ))?;
+
+                let is_owner = verification::check_github_org_ownership(access_token, &forge_user).await?;
+                if is_owner {
+                    is_verified = true;
+                    verification_info = Some(VerificationInfo {
+                        status: "verified".into(),
+                        domain: None,
+                        token: None,
+                        well_known_url: None,
+                    });
+                } else {
+                    return Err(AppError::BadRequest(format!(
+                        "You are not an owner of the '{}' GitHub organization",
+                        forge_user
+                    )));
+                }
+            }
+        } else {
+            // Custom domain: generate/retrieve verification token
+            let domain = verification::extract_domain(&input.app_id)
+                .ok_or_else(|| AppError::BadRequest("Could not extract domain from app ID".into()))?;
+
+            let record = verified_domain::create_or_get(&state.db, &domain, auth.user_id).await?;
+
+            if record.verified {
+                is_verified = true;
+                verification_info = Some(VerificationInfo {
+                    status: "verified".into(),
+                    domain: Some(domain),
+                    token: None,
+                    well_known_url: None,
+                });
+            } else {
+                verification_info = Some(VerificationInfo {
+                    status: "pending".into(),
+                    domain: Some(domain.clone()),
+                    token: Some(record.token),
+                    well_known_url: Some(format!("https://{domain}/.well-known/org.friendlyhub.VerifiedApps.txt")),
+                });
+            }
+        }
+    }
+
+    let a = app::create(&state.db, auth.user_id, &input, is_verified).await?;
+    Ok(Json(CreateAppResponse {
+        app: AppResponse::from(a),
+        verification: verification_info,
+    }))
 }
 
 async fn update_app(
@@ -220,6 +339,79 @@ async fn get_flatpakref(
         ],
         body,
     ))
+}
+
+async fn verify_domain(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(app_id): Path<String>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let a = app::find_by_app_id(&state.db, &app_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("App not found".into()))?;
+
+    if a.owner_id != auth.user_id && auth.role != "admin" {
+        return Err(AppError::Forbidden);
+    }
+
+    if a.is_verified {
+        return Ok(Json(serde_json::json!({ "status": "already_verified" })));
+    }
+
+    let domain = verification::extract_domain(&app_id)
+        .ok_or_else(|| AppError::BadRequest("Could not extract domain from app ID".into()))?;
+
+    let record = verified_domain::find_by_domain_and_user(&state.db, &domain, auth.user_id)
+        .await?
+        .ok_or_else(|| AppError::BadRequest("No verification record found. Re-register the app.".into()))?;
+
+    if record.verified {
+        // Domain was verified (maybe for another app), just update this app
+        app::set_verified(&state.db, a.id, true).await?;
+        return Ok(Json(serde_json::json!({ "status": "verified" })));
+    }
+
+    // Check the well-known URL
+    let is_valid = verification::verify_domain_token(&domain, &record.token).await?;
+
+    if is_valid {
+        verified_domain::mark_verified(&state.db, &domain, auth.user_id).await?;
+        app::set_verified(&state.db, a.id, true).await?;
+        Ok(Json(serde_json::json!({ "status": "verified" })))
+    } else {
+        Ok(Json(serde_json::json!({
+            "status": "failed",
+            "message": format!("Token not found at https://{}/.well-known/org.friendlyhub.VerifiedApps.txt", domain),
+            "token": record.token,
+        })))
+    }
+}
+
+#[derive(Deserialize)]
+struct CheckDomainRequest {
+    domain: String,
+}
+
+async fn check_domain_status(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(input): Json<CheckDomainRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let record = verified_domain::find_by_domain_and_user(&state.db, &input.domain, auth.user_id).await?;
+
+    match record {
+        Some(r) => Ok(Json(serde_json::json!({
+            "domain": r.domain,
+            "verified": r.verified,
+            "token": r.token,
+            "well_known_url": format!("https://{}/.well-known/org.friendlyhub.VerifiedApps.txt", r.domain),
+        }))),
+        None => Ok(Json(serde_json::json!({
+            "domain": input.domain,
+            "verified": false,
+            "token": null,
+        }))),
+    }
 }
 
 async fn load_gpg_key_from_s3(

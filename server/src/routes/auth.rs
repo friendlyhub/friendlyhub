@@ -22,7 +22,7 @@ pub fn routes() -> Router<AppState> {
 /// Redirects the user to GitHub's OAuth authorization page.
 async fn github_login(State(state): State<AppState>) -> Redirect {
     let url = format!(
-        "https://github.com/login/oauth/authorize?client_id={}&scope=read:user,user:email",
+        "https://github.com/login/oauth/authorize?client_id={}&scope=read:user,user:email,read:org",
         state.config.github_client_id
     );
     Redirect::temporary(&url)
@@ -56,6 +56,7 @@ async fn github_callback(
         &display_name,
         gh_user.email.as_deref(),
         gh_user.avatar_url.as_deref(),
+        Some(&access_token),
     )
     .await?;
 

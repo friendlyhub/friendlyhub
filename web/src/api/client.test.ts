@@ -62,8 +62,7 @@ describe('API client', () => {
 
     await expect(createApp({
       app_id: 'bad',
-      name: 'Test',
-      summary: 'Test app',
+      developer_type: 'original',
     })).rejects.toThrow('Bad app-id format');
   });
 
@@ -86,8 +85,7 @@ describe('API client', () => {
 
     await createApp({
       app_id: 'org.test.App',
-      name: 'Test App',
-      summary: 'A test',
+      developer_type: 'original',
     });
 
     const [, options] = mockFetch.mock.calls[0];

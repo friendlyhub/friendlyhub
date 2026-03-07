@@ -1,12 +1,15 @@
 set dotenv-load := false
 set shell := ["bash", "-lc"]
 
-stage := env("STAGE", "dev")
 region := env("AWS_REGION", "eu-west-1")
 
-# Build the Lambda binary, zip it, and deploy to AWS
-deploy: build
-    cd infra && serverless deploy --stage {{stage}}
+# Build the Lambda binary, zip it, and deploy to dev
+deploy-dev: build
+    cd infra && serverless deploy --stage dev
+
+# Build the Lambda binary, zip it, and deploy to prod
+deploy-prod: build
+    cd infra && serverless deploy --stage prod
 
 # Build the Lambda binary and package it
 build:
@@ -31,10 +34,7 @@ test-all: test test-web
 run:
     cd server && cargo run
 
-# Set up SSM parameters for a stage
-setup:
-    ./scripts/setup.sh {{stage}}
-
-# Tear down the deployed stack
-destroy:
-    cd infra && serverless remove --stage {{stage}}
+# Build and deploy the frontend SPA to S3 (prod)
+deploy-web:
+    cd web && npm run build
+    aws s3 sync web/dist/ s3://friendlyhub-prod-spabucket-gbz4esxpwx5u --delete --region {{region}}

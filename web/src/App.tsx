@@ -14,6 +14,7 @@ import SubmissionDetail from './pages/SubmissionDetail';
 import ReviewQueue from './pages/ReviewQueue';
 import ReviewDetail from './pages/ReviewDetail';
 import InstallApp from './pages/InstallApp';
+import VerifyApp from './pages/VerifyApp';
 import AuthCallback from './pages/AuthCallback';
 
 const queryClient = new QueryClient({
@@ -68,6 +69,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <NewApp />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/my/apps/:appId/verify"
+          element={
+            <ProtectedRoute>
+              <VerifyApp />
             </ProtectedRoute>
           }
         />
