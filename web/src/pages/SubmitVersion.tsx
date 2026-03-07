@@ -1,42 +1,12 @@
-import { useState } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams, Link } from 'react-router-dom';
+import { FileCode, FormInput, AlertTriangle } from 'lucide-react';
 import yaml from 'js-yaml';
 import { getApp, submitApp } from '../api/client';
-
-function parseManifest(text: string): unknown {
-  // Try JSON first, then YAML
-  try {
-    return JSON.parse(text);
-  } catch {
-    // Not JSON, try YAML
-  }
-  try {
-    return yaml.load(text);
-  } catch {
-    // Neither worked
-  }
-  throw new Error('Invalid manifest. Must be valid JSON or YAML.');
-}
-
-const EXAMPLE_MANIFEST = `app-id: org.example.MyApp
-runtime: org.freedesktop.Platform
-runtime-version: "24.08"
-sdk: org.freedesktop.Sdk
-command: myapp
-modules:
-  - name: myapp
-    buildsystem: simple
-    build-commands:
-      - install -D myapp /app/bin/myapp
-    sources:
-      - type: archive
-        url: https://example.org/myapp-1.0.tar.gz
-        sha256: "..."
-finish-args:
-  - --share=ipc
-  - --socket=fallback-x11
-  - --socket=wayland`;
+import ManifestForm from '../components/ManifestForm';
+import ManifestEditor, { type EditorFormat } from '../components/ManifestEditor';
+import { createBlankManifest, normalizeManifest, validateRequired, type Manifest } from '../utils/manifest';
 
 function exampleMetainfo(appId: string, name: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -72,14 +42,50 @@ function exampleMetainfo(appId: string, name: string): string {
 </component>`;
 }
 
+function serializeManifest(m: Manifest, format: EditorFormat): string {
+  if (format === 'json') {
+    return JSON.stringify(m, null, 2);
+  }
+  return yaml.dump(m, { indent: 2, lineWidth: -1, noRefs: true, quotingType: '"' });
+}
+
+function parseManifestText(text: string): Record<string, unknown> | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  try {
+    return JSON.parse(trimmed) as Record<string, unknown>;
+  } catch { /* not JSON */ }
+  try {
+    const result = yaml.load(trimmed);
+    if (result && typeof result === 'object') return result as Record<string, unknown>;
+  } catch { /* not YAML */ }
+  return null;
+}
+
 export default function SubmitVersion() {
   const { appId } = useParams<{ appId: string }>();
   const navigate = useNavigate();
-  const [version, setVersion] = useState('');
-  const [manifestText, setManifestText] = useState('');
-  const [metainfoText, setMetainfoText] = useState('');
+
+  // Manifest state
+  const [manifest, setManifest] = useState<Manifest>(() => createBlankManifest(appId || ''));
+  const [editorText, setEditorText] = useState<string>(() =>
+    serializeManifest(createBlankManifest(appId || ''), 'yaml')
+  );
+  const [editorFormat, setEditorFormat] = useState<EditorFormat>('yaml');
   const [parseError, setParseError] = useState<string | null>(null);
+
+  // Track which side is driving updates to prevent loops
+  const updateSourceRef = useRef<'form' | 'editor' | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Submission fields (kept for now)
+  const [version, setVersion] = useState('');
+  const [metainfoText, setMetainfoText] = useState('');
   const [sourceFiles, setSourceFiles] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Mobile view toggle
+  const [mobileView, setMobileView] = useState<'form' | 'editor'>('form');
 
   const { data: app, isLoading: appLoading } = useQuery({
     queryKey: ['app', appId],
@@ -87,30 +93,73 @@ export default function SubmitVersion() {
     enabled: !!appId,
   });
 
+  // Form -> Editor sync
+  const handleFormChange = useCallback((newManifest: Manifest) => {
+    updateSourceRef.current = 'form';
+    setManifest(newManifest);
+    setEditorText(serializeManifest(newManifest, editorFormat));
+    setParseError(null);
+  }, [editorFormat]);
+
+  // Editor -> Form sync (debounced)
+  const handleEditorChange = useCallback((text: string, _format: EditorFormat) => {
+    setEditorText(text);
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    debounceRef.current = setTimeout(() => {
+      updateSourceRef.current = 'editor';
+      const parsed = parseManifestText(text);
+      if (parsed) {
+        setManifest(normalizeManifest(parsed));
+        setParseError(null);
+      } else if (text.trim()) {
+        setParseError('Invalid manifest. Must be valid JSON or YAML.');
+      }
+    }, 400);
+  }, []);
+
+  // Format change (JSON <-> YAML)
+  const handleFormatChange = useCallback((newFormat: EditorFormat) => {
+    setEditorFormat(newFormat);
+  }, []);
+
+  // File load
+  const handleLoadFile = useCallback((text: string, detectedFormat: EditorFormat) => {
+    setEditorFormat(detectedFormat);
+    setEditorText(text);
+    const parsed = parseManifestText(text);
+    if (parsed) {
+      setManifest(normalizeManifest(parsed));
+      setParseError(null);
+    } else {
+      setParseError('Could not parse the uploaded file.');
+    }
+  }, []);
+
+  // Validation
+  const missingFields = useMemo(() => validateRequired(manifest), [manifest]);
+  const appIdMismatch = manifest.id !== undefined && manifest.id !== appId;
+
+  // Submission
   const mutation = useMutation({
     mutationFn: () => {
-      setParseError(null);
-      const manifest = parseManifest(manifestText);
+      setSubmitError(null);
       return submitApp(appId!, version, manifest, metainfoText, sourceFiles);
     },
     onSuccess: (result) => {
       navigate(`/my/submissions/${result.id}`);
     },
     onError: (err: Error) => {
-      if (
-        err.message.includes('manifest') ||
-        err.message.includes('metainfo') ||
-        err.message.includes('JSON') ||
-        err.message.includes('YAML') ||
-        err.message.includes('XML')
-      ) {
-        setParseError(err.message);
-      }
+      setSubmitError(err.message);
     },
   });
 
+  const canSubmit = missingFields.length === 0 && !appIdMismatch && !parseError && version.trim() && metainfoText.trim();
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canSubmit) return;
     mutation.mutate();
   };
 
@@ -119,229 +168,222 @@ export default function SubmitVersion() {
   }
 
   if (!app) {
-    return (
-      <div className="text-center py-12 text-red-500">App not found</div>
-    );
+    return <div className="text-center py-12 text-red-500">App not found</div>;
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-6">
-        <Link
-          to={`/apps/${app.app_id}`}
-          className="text-sm text-emerald-600 hover:text-emerald-700"
-        >
-          &larr; Back to {app.name}
-        </Link>
-      </div>
-
-      <h1 className="text-3xl font-bold text-gray-900 mb-2">
-        Submit New Version
-      </h1>
-      <p className="text-gray-500 mb-8">
-        Submit a Flatpak manifest and metainfo for{' '}
-        <span className="font-mono font-medium text-gray-700">
-          {app.app_id}
-        </span>{' '}
-        to trigger a build.
-      </p>
-
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Version <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            required
-            value={version}
-            onChange={(e) => setVersion(e.target.value)}
-            placeholder="1.0.0"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
-          />
-        </div>
-
-        <div>
-          <div className="flex justify-between items-center mb-1">
-            <label className="block text-sm font-medium text-gray-700">
-              Flatpak Manifest (JSON or YAML){' '}
-              <span className="text-red-500">*</span>
-            </label>
-            <button
-              type="button"
-              onClick={() => {
-                setManifestText(
-                  EXAMPLE_MANIFEST.replace(
-                    'org.example.MyApp',
-                    app.app_id,
-                  ).replace(
-                    'myapp',
-                    app.name.toLowerCase().replace(/\s+/g, ''),
-                  ),
-                );
-                setParseError(null);
-              }}
+    <div className="flex flex-col min-h-0">
+      {/* Header */}
+      <div className="px-4 sm:px-6 py-3 bg-white border-b border-gray-200">
+        <div className="flex items-center justify-between">
+          <div>
+            <Link
+              to={`/apps/${app.app_id}`}
               className="text-xs text-emerald-600 hover:text-emerald-700"
             >
-              Load example
+              &larr; {app.name}
+            </Link>
+            <h1 className="text-lg font-bold text-gray-900">
+              Submit New Version
+              <span className="text-sm font-normal text-gray-500 ml-2 font-mono">{app.app_id}</span>
+            </h1>
+          </div>
+
+          {/* Mobile view toggle */}
+          <div className="flex lg:hidden items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+            <button
+              type="button"
+              onClick={() => setMobileView('form')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                mobileView === 'form' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+              }`}
+            >
+              <FormInput className="w-3.5 h-3.5" /> Form
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileView('editor')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                mobileView === 'editor' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+              }`}
+            >
+              <FileCode className="w-3.5 h-3.5" /> Manifest
             </button>
           </div>
-          <textarea
-            required
-            value={manifestText}
-            onChange={(e) => {
-              setManifestText(e.target.value);
-              setParseError(null);
-            }}
-            rows={16}
-            placeholder="Paste your Flatpak manifest here (JSON or YAML)..."
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono leading-relaxed"
+        </div>
+      </div>
+
+      {/* Dual-pane editor */}
+      <div className="flex">
+        {/* Form pane (left) */}
+        <div className={`lg:w-1/2 lg:block ${mobileView === 'form' ? 'w-full' : 'hidden'} bg-white`}>
+          <ManifestForm
+            manifest={manifest}
+            onChange={handleFormChange}
+            lockedAppId={appId || ''}
           />
         </div>
 
-        <div>
-          <div className="flex justify-between items-center mb-1">
-            <label className="block text-sm font-medium text-gray-700">
-              AppStream Metainfo (XML) <span className="text-red-500">*</span>
-            </label>
-            <div className="flex gap-2">
-              <label className="text-xs text-emerald-600 hover:text-emerald-700 cursor-pointer">
-                Upload file
-                <input
-                  type="file"
-                  accept=".xml,.metainfo.xml"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
+        {/* Editor pane (right) - sticky so it stays visible while form scrolls */}
+        <div className={`lg:w-1/2 lg:block ${mobileView === 'editor' ? 'w-full' : 'hidden'} lg:sticky lg:top-0 h-[calc(100vh-4rem)] lg:self-start`}>
+          <ManifestEditor
+            value={editorText}
+            format={editorFormat}
+            onChange={handleEditorChange}
+            onFormatChange={handleFormatChange}
+            parseError={parseError}
+            onLoadFile={handleLoadFile}
+          />
+        </div>
+      </div>
+
+      {/* Submission area */}
+      <div className="bg-white border-t border-gray-200 px-4 sm:px-6 py-4">
+        <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-4">
+          {/* Validation status */}
+          {missingFields.length > 0 && (
+            <div className="text-xs text-amber-600">
+              Missing required fields: {missingFields.join(', ')}
+            </div>
+          )}
+
+          {/* Version + Metainfo (kept for submission) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Version <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={version}
+                onChange={(e) => setVersion(e.target.value)}
+                placeholder="1.0.0"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Companion Source Files{' '}
+                <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <input
+                type="file"
+                multiple
+                accept=".json"
+                onChange={(e) => {
+                  const files = e.target.files;
+                  if (!files) return;
+                  Array.from(files).forEach((file) => {
                     const reader = new FileReader();
                     reader.onload = () => {
-                      setMetainfoText(reader.result as string);
-                      setParseError(null);
+                      setSourceFiles((prev) => ({
+                        ...prev,
+                        [file.name]: reader.result as string,
+                      }));
                     };
                     reader.readAsText(file);
-                  }}
-                />
-              </label>
-              <button
-                type="button"
-                onClick={() => {
-                  setMetainfoText(exampleMetainfo(app.app_id, app.name));
-                  setParseError(null);
+                  });
                 }}
-                className="text-xs text-emerald-600 hover:text-emerald-700"
-              >
-                Load example
-              </button>
-            </div>
-          </div>
-          <textarea
-            required
-            value={metainfoText}
-            onChange={(e) => {
-              setMetainfoText(e.target.value);
-              setParseError(null);
-            }}
-            rows={16}
-            placeholder={`Paste your AppStream metainfo XML here (${app.app_id}.metainfo.xml)...`}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono leading-relaxed"
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            AppStream metainfo provides app metadata: name, description,
-            screenshots, changelog, developer info, and license. See the{' '}
-            <a
-              href="https://www.freedesktop.org/software/appstream/docs/chap-Metadata.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-emerald-600 hover:underline"
-            >
-              AppStream specification
-            </a>{' '}
-            for details.
-          </p>
-          {parseError && (
-            <p className="text-sm text-red-600 mt-1">{parseError}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Companion Source Files{' '}
-            <span className="text-gray-400 font-normal">(optional)</span>
-          </label>
-          <p className="text-xs text-gray-500 mb-2">
-            If your manifest references external source files (e.g.{' '}
-            <span className="font-mono">cargo-sources.json</span>,{' '}
-            <span className="font-mono">node-sources.json</span>), add them
-            here.
-          </p>
-          <input
-            type="file"
-            multiple
-            accept=".json"
-            onChange={(e) => {
-              const files = e.target.files;
-              if (!files) return;
-              Array.from(files).forEach((file) => {
-                const reader = new FileReader();
-                reader.onload = () => {
-                  setSourceFiles((prev) => ({
-                    ...prev,
-                    [file.name]: reader.result as string,
-                  }));
-                };
-                reader.readAsText(file);
-              });
-            }}
-            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
-          />
-          {Object.keys(sourceFiles).length > 0 && (
-            <div className="mt-2 space-y-1">
-              {Object.keys(sourceFiles).map((name) => (
-                <div
-                  key={name}
-                  className="flex items-center justify-between bg-gray-50 rounded px-3 py-1.5 text-sm"
-                >
-                  <span className="font-mono text-gray-700">{name}</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSourceFiles((prev) => {
-                        const next = { ...prev };
-                        delete next[name];
-                        return next;
-                      })
-                    }
-                    className="text-red-500 hover:text-red-700 text-xs"
-                  >
-                    Remove
-                  </button>
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
+              />
+              {Object.keys(sourceFiles).length > 0 && (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {Object.keys(sourceFiles).map((name) => (
+                    <span
+                      key={name}
+                      className="inline-flex items-center gap-1 bg-gray-100 rounded px-2 py-0.5 text-xs font-mono"
+                    >
+                      {name}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSourceFiles((prev) => {
+                            const next = { ...prev };
+                            delete next[name];
+                            return next;
+                          })
+                        }
+                        className="text-red-400 hover:text-red-600"
+                      >
+                        &times;
+                      </button>
+                    </span>
+                  ))}
                 </div>
-              ))}
+              )}
+            </div>
+          </div>
+
+          {/* Metainfo */}
+          <div>
+            <div className="flex justify-between items-center mb-1">
+              <label className="block text-sm font-medium text-gray-700">
+                AppStream Metainfo (XML) <span className="text-red-500">*</span>
+              </label>
+              <div className="flex gap-2">
+                <label className="text-xs text-emerald-600 hover:text-emerald-700 cursor-pointer">
+                  Upload
+                  <input
+                    type="file"
+                    accept=".xml,.metainfo.xml"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () => setMetainfoText(reader.result as string);
+                      reader.readAsText(file);
+                    }}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setMetainfoText(exampleMetainfo(app.app_id, app.name))}
+                  className="text-xs text-emerald-600 hover:text-emerald-700"
+                >
+                  Example
+                </button>
+              </div>
+            </div>
+            <textarea
+              required
+              value={metainfoText}
+              onChange={(e) => setMetainfoText(e.target.value)}
+              rows={6}
+              placeholder={`Paste AppStream metainfo XML (${app.app_id}.metainfo.xml)...`}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono leading-relaxed"
+            />
+          </div>
+
+          {/* Errors */}
+          {(submitError || mutation.isError) && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+              {submitError || (mutation.error as Error).message}
             </div>
           )}
-        </div>
 
-        {mutation.isError && !parseError && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
-            {(mutation.error as Error).message}
+          {/* Beta notice */}
+          <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700">
+            <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <p>
+              The manifest editor and validator are in beta and provided on a best-effort basis.
+              Your submission passing validation here does not necessarily mean it will pass
+              flatpak-builder validation. You will have the opportunity to make changes if
+              the submission fails.
+            </p>
           </div>
-        )}
 
-        {mutation.isSuccess && (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm text-emerald-700">
-            Build submitted. Redirecting...
-          </div>
-        )}
-
-        <button
-          type="submit"
-          disabled={mutation.isPending}
-          className="w-full bg-emerald-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
-        >
-          {mutation.isPending ? 'Submitting...' : 'Submit Build'}
-        </button>
-      </form>
+          {/* Submit */}
+          <button
+            type="submit"
+            disabled={mutation.isPending || !canSubmit}
+            className="w-full bg-emerald-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {mutation.isPending ? 'Submitting...' : 'Submit Build'}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

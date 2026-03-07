@@ -99,13 +99,15 @@ export default function Layout() {
             />
           )}
 
-          {/* Sidebar */}
+          {/* Sidebar: icons only, expands on hover */}
           <aside
-            className={`fixed lg:static inset-y-0 left-0 z-50 w-56 bg-white border-r border-gray-200 pt-4 transform transition-transform lg:transform-none ${
-              sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+            className={`fixed lg:static inset-y-0 left-0 z-50 bg-white border-r border-gray-200 pt-4 transform transition-all lg:transform-none group/sidebar ${
+              sidebarOpen
+                ? 'translate-x-0 w-56'
+                : '-translate-x-full lg:translate-x-0 lg:w-14 lg:hover:w-56'
             }`}
           >
-            <nav className="space-y-1 px-3">
+            <nav className="space-y-1 px-2">
               {sidebarLinks.map(({ to, label, icon: Icon }) => {
                 const isActive = location.pathname.startsWith(to);
                 return (
@@ -113,14 +115,19 @@ export default function Layout() {
                     key={to}
                     to={to}
                     onClick={() => setSidebarOpen(false)}
-                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    title={label}
+                    className={`flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                       isActive
                         ? 'bg-emerald-50 text-emerald-700'
                         : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                     }`}
                   >
-                    <Icon className={`w-4 h-4 ${isActive ? 'text-emerald-600' : 'text-gray-400'}`} />
-                    {label}
+                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-emerald-600' : 'text-gray-400'}`} />
+                    <span className={`whitespace-nowrap overflow-hidden transition-opacity ${
+                      sidebarOpen ? 'opacity-100' : 'opacity-0 lg:group-hover/sidebar:opacity-100'
+                    }`}>
+                      {label}
+                    </span>
                   </Link>
                 );
               })}
