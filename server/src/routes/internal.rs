@@ -6,12 +6,13 @@ use serde_json::{json, Value};
 use crate::errors::AppError;
 use crate::models::app;
 use crate::router::AppState;
-use crate::services::{appstream, flat_manager};
+use crate::services::{appstream, flat_manager, install_counts};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/internal/flat-manager-url", get(flat_manager_url))
         .route("/internal/refresh-appstream", post(refresh_appstream))
+        .route("/internal/process-install-counts", post(process_install_counts))
 }
 
 async fn flat_manager_url(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
@@ -77,5 +78,26 @@ async fn refresh_appstream(State(state): State<AppState>) -> Result<Json<Value>,
         "total_published": apps.len(),
         "updated": updated,
         "errors": errors,
+    })))
+}
+
+/// Process CloudFront access logs to count app installs.
+async fn process_install_counts(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
+    if state.config.cf_logs_bucket.is_empty() {
+        return Ok(Json(json!({ "skipped": true, "reason": "CF_LOGS_BUCKET not configured" })));
+    }
+
+    let result = install_counts::process_logs(
+        &state.s3_client,
+        &state.db,
+        &state.config.cf_logs_bucket,
+        &state.config.cf_logs_prefix,
+    )
+    .await?;
+
+    Ok(Json(json!({
+        "files_processed": result.files_processed,
+        "apps_updated": result.installs.len(),
+        "installs": result.installs,
     })))
 }

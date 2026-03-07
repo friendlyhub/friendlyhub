@@ -1,5 +1,7 @@
 use axum::{
     extract::{Path, Query, State},
+    http::{header, StatusCode},
+    response::IntoResponse,
     routing::get,
     Json, Router,
 };
@@ -19,6 +21,7 @@ pub fn routes() -> Router<AppState> {
         .route("/apps/by-owner/{owner_id}", get(apps_by_owner))
         .route("/apps/{app_id}", get(get_app).put(update_app).delete(delete_app))
         .route("/apps/{app_id}/unpublish", axum::routing::post(unpublish_app))
+        .route("/apps/{app_id}/flatpakref", get(get_flatpakref))
 }
 
 #[derive(Deserialize)]
@@ -171,4 +174,72 @@ async fn delete_app(
     }
 
     Ok(Json(serde_json::json!({ "status": "deleted" })))
+}
+
+async fn get_flatpakref(
+    State(state): State<AppState>,
+    Path(app_id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    // Verify the app exists and is published
+    let a = app::find_by_app_id(&state.db, &app_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("App not found".into()))?;
+    if !a.is_published {
+        return Err(AppError::NotFound("App not found".into()));
+    }
+
+    // Load GPG key: prefer config, fall back to reading .flatpakrepo from S3
+    let gpg_key = if !state.config.repo_gpg_key.is_empty() {
+        Some(state.config.repo_gpg_key.clone())
+    } else {
+        load_gpg_key_from_s3(&state.s3_client, &state.config.repo_s3_bucket).await
+    };
+
+    let repo_url = format!("{}/repo/", state.config.repo_cdn_url.trim_end_matches('/'));
+    let mut lines = vec![
+        "[Flatpak Ref]".to_string(),
+        format!("Title={} from friendlyhub", app_id),
+        format!("Name={}", app_id),
+        "Branch=stable".to_string(),
+        format!("Url={}", repo_url),
+        "IsRuntime=false".to_string(),
+        "SuggestRemoteName=friendlyhub".to_string(),
+        "RuntimeRepo=https://dl.flathub.org/repo/flathub.flatpakrepo".to_string(),
+    ];
+    if let Some(key) = gpg_key {
+        lines.push(format!("GPGKey={}", key));
+    }
+    lines.push(String::new()); // trailing newline
+    let body = lines.join("\n");
+
+    Ok((
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, "application/vnd.flatpak.ref"),
+            (header::CONTENT_DISPOSITION, "inline"),
+        ],
+        body,
+    ))
+}
+
+async fn load_gpg_key_from_s3(
+    s3_client: &aws_sdk_s3::Client,
+    bucket: &str,
+) -> Option<String> {
+    let resp = s3_client
+        .get_object()
+        .bucket(bucket)
+        .key("repo/friendlyhub.flatpakrepo")
+        .send()
+        .await
+        .ok()?;
+    let body = resp.body.collect().await.ok()?;
+    let bytes = body.into_bytes();
+    let text = String::from_utf8_lossy(&bytes);
+    for line in text.lines() {
+        if let Some(val) = line.strip_prefix("GPGKey=") {
+            return Some(val.to_string());
+        }
+    }
+    None
 }

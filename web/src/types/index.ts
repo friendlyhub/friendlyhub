@@ -44,9 +44,13 @@ export interface App {
   project_license: string | null;
   keywords: string[];
   finish_args: string[];
+  download_size: number | null;
+  installed_size: number | null;
+  install_count: number;
   is_published: boolean;
   is_verified: boolean;
   created_at: string;
+  updated_at: string;
 }
 
 export interface Submission {

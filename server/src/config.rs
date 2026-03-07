@@ -17,6 +17,9 @@ pub struct Config {
     pub ecs_service: String,
     pub repo_s3_bucket: String,
     pub repo_cdn_url: String,
+    pub repo_gpg_key: String,
+    pub cf_logs_bucket: String,
+    pub cf_logs_prefix: String,
 }
 
 impl Config {
@@ -51,6 +54,9 @@ impl Config {
                 .unwrap_or_else(|_| "friendlyhub-dev-ostreerepobucket-3tirz1kgdfla".into()),
             repo_cdn_url: env::var("REPO_CDN_URL")
                 .unwrap_or_else(|_| "https://dl.friendlyhub.org".into()),
+            repo_gpg_key: env::var("REPO_GPG_KEY").unwrap_or_default(),
+            cf_logs_bucket: env::var("CF_LOGS_BUCKET").unwrap_or_default(),
+            cf_logs_prefix: env::var("CF_LOGS_PREFIX").unwrap_or_else(|_| "cdn/".into()),
         }
     }
 

@@ -10,10 +10,6 @@ provider:
     project: friendlyhub
   tags:
     project: friendlyhub
-  httpApi:
-    throttle:
-      burstLimit: 100
-      rateLimit: 50
   environment:
     DYNAMODB_TABLE: !Ref DynamoDBTable
     FLAT_MANAGER_TOKEN: ${ssm:/friendlyhub/${self:provider.stage}/flat-manager-jwt}
@@ -28,6 +24,8 @@ provider:
     ECS_SERVICE: flat-manager
     REPO_S3_BUCKET: !Ref OstreeRepoBucket
     REPO_CDN_URL: https://dl.friendlyhub.org
+    CF_LOGS_BUCKET: !Ref CFLogsBucket
+    CF_LOGS_PREFIX: cdn/
     RUST_LOG: info
   iam:
     role:
@@ -67,6 +65,15 @@ provider:
             - s3:GetObject
           Resource:
             - !Sub "${OstreeRepoBucket.Arn}/repo/appstream/*"
+            - !Sub "${OstreeRepoBucket.Arn}/repo/friendlyhub.flatpakrepo"
+        - Effect: Allow
+          Action:
+            - s3:GetObject
+            - s3:DeleteObject
+            - s3:ListBucket
+          Resource:
+            - !GetAtt CFLogsBucket.Arn
+            - !Sub "${CFLogsBucket.Arn}/*"
 
 package:
   artifact: .build/friendlyhub.zip
@@ -350,6 +357,22 @@ resources:
           - Key: project
             Value: friendlyhub
 
+    # ---- S3 for CloudFront access logs ----
+    CFLogsBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        OwnershipControls:
+          Rules:
+            - ObjectOwnership: BucketOwnerPreferred
+        LifecycleConfiguration:
+          Rules:
+            - Id: expire-logs
+              Status: Enabled
+              ExpirationInDays: 30
+        Tags:
+          - Key: project
+            Value: friendlyhub
+
     # ---- CloudFront for OSTree repo (dl.friendlyhub.org) ----
     OstreeRepoOAC:
       Type: AWS::CloudFront::OriginAccessControl
@@ -405,6 +428,10 @@ resources:
               OriginAccessControlId: !Ref OstreeRepoOAC
               S3OriginConfig:
                 OriginAccessIdentity: ""
+          Logging:
+            Bucket: !GetAtt CFLogsBucket.DomainName
+            IncludeCookies: false
+            Prefix: cdn/
           HttpVersion: http2and3
           PriceClass: PriceClass_100
         Tags:
@@ -564,6 +591,8 @@ resources:
                   else
                     echo "No changes"
                   fi
+                  echo "Processing install counts..."
+                  python3 -c "import urllib.request; r=urllib.request.urlopen(urllib.request.Request('${API_URL}/api/v1/internal/process-install-counts', method='POST', data=b'')); print(f'Install counts: {r.read().decode()}')" 2>&1 || echo "Install count processing failed (non-fatal)"
                   sleep 60
                 done
             Environment:
@@ -643,3 +672,5 @@ resources:
       Value: !Ref ECSCluster
     FlatManagerDBEndpoint:
       Value: !GetAtt FlatManagerDB.Endpoint.Address
+    CFLogsBucket:
+      Value: !Ref CFLogsBucket

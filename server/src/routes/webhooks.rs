@@ -30,6 +30,10 @@ struct BuildCompletePayload {
     fm_build_id: Option<i32>,
     /// URL to build logs
     build_log_url: Option<String>,
+    /// Download size in bytes (compressed repo size)
+    download_size: Option<i64>,
+    /// Installed size in bytes
+    installed_size: Option<i64>,
 }
 
 fn verify_webhook_secret(headers: &HeaderMap, state: &AppState) -> Result<(), AppError> {
@@ -149,6 +153,15 @@ async fn build_complete(
             }
             if let Some(ref log_url) = payload.build_log_url {
                 submission::set_build_log_url(&state.db, sub.id, log_url).await?;
+            }
+            // Store download/install sizes on the app
+            if payload.download_size.is_some() || payload.installed_size.is_some() {
+                app::update_sizes(
+                    &state.db,
+                    sub.app_id,
+                    payload.download_size,
+                    payload.installed_size,
+                ).await?;
             }
             // Run automated checks on the manifest
             let check_results = checks::run_checks(&sub.manifest);

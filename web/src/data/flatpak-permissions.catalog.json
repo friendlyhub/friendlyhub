@@ -1,0 +1,1183 @@
+{
+  "version": 2,
+  "source": "https://docs.flatpak.org/en/latest/sandbox-permissions.html",
+  "permissions": [
+    {
+      "id": "allow-bluetooth",
+      "category": "allow",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--allow=bluetooth"
+      },
+      "severity": "caution",
+      "description": "Allows the app to use Bluetooth connections and devices.",
+      "examples": [
+        "--allow=bluetooth"
+      ]
+    },
+    {
+      "id": "allow-devel",
+      "category": "allow",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--allow=devel"
+      },
+      "severity": "sensitive",
+      "description": "Allows development-oriented access that weakens sandbox restrictions.",
+      "examples": [
+        "--allow=devel"
+      ],
+      "notes": "Common for development tools; inappropriate for ordinary desktop apps."
+    },
+    {
+      "id": "allow-multiarch",
+      "category": "allow",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--allow=multiarch"
+      },
+      "severity": "caution",
+      "description": "Allows the app to use libraries for additional CPU architectures.",
+      "examples": [
+        "--allow=multiarch"
+      ]
+    },
+    {
+      "id": "allow-per-app-dev-shm",
+      "category": "allow",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--allow=per-app-dev-shm"
+      },
+      "severity": "safe",
+      "description": "Uses a private shared-memory area for this app instead of the host-wide one.",
+      "examples": [
+        "--allow=per-app-dev-shm"
+      ]
+    },
+    {
+      "id": "allow-canbus",
+      "category": "allow",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--allow=canbus"
+      },
+      "severity": "caution",
+      "description": "Allows the app to use CAN bus networking interfaces.",
+      "examples": [
+        "--allow=canbus"
+      ]
+    },
+    {
+      "id": "share-ipc",
+      "category": "share",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--share=ipc"
+      },
+      "severity": "safe",
+      "description": "Allows the app to share inter-process communication memory with the host.",
+      "examples": [
+        "--share=ipc"
+      ]
+    },
+    {
+      "id": "share-network",
+      "category": "share",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--share=network"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access the network and internet.",
+      "examples": [
+        "--share=network"
+      ]
+    },
+    {
+      "id": "socket-wayland",
+      "category": "socket",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--socket=wayland"
+      },
+      "severity": "safe",
+      "description": "Allows the app to display windows using Wayland.",
+      "examples": [
+        "--socket=wayland"
+      ]
+    },
+    {
+      "id": "socket-x11",
+      "category": "socket",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--socket=x11"
+      },
+      "severity": "caution",
+      "description": "Allows the app to display windows using X11.",
+      "examples": [
+        "--socket=x11"
+      ]
+    },
+    {
+      "id": "socket-fallback-x11",
+      "category": "socket",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--socket=fallback-x11"
+      },
+      "severity": "caution",
+      "description": "Allows the app to use X11 only when Wayland is unavailable.",
+      "examples": [
+        "--socket=fallback-x11"
+      ]
+    },
+    {
+      "id": "socket-pulseaudio",
+      "category": "socket",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--socket=pulseaudio"
+      },
+      "severity": "caution",
+      "description": "Allows the app to play audio and may also allow audio input such as the microphone.",
+      "examples": [
+        "--socket=pulseaudio"
+      ]
+    },
+    {
+      "id": "socket-cups",
+      "category": "socket",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--socket=cups"
+      },
+      "severity": "caution",
+      "description": "Allows the app to talk to the printing system.",
+      "examples": [
+        "--socket=cups"
+      ]
+    },
+    {
+      "id": "socket-pcsc",
+      "category": "socket",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--socket=pcsc"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access smart card services.",
+      "examples": [
+        "--socket=pcsc"
+      ]
+    },
+    {
+      "id": "socket-gpg-agent",
+      "category": "socket",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--socket=gpg-agent"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app to talk to your GPG agent, which may let it perform GPG operations on your behalf.",
+      "examples": [
+        "--socket=gpg-agent"
+      ]
+    },
+    {
+      "id": "socket-ssh-auth",
+      "category": "socket",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--socket=ssh-auth"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app to use your SSH authentication agent.",
+      "examples": [
+        "--socket=ssh-auth"
+      ]
+    },
+    {
+      "id": "socket-inherit-wayland-socket",
+      "category": "socket",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--socket=inherit-wayland-socket"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app to inherit the parent Wayland socket, which weakens Wayland sandbox isolation.",
+      "examples": [
+        "--socket=inherit-wayland-socket"
+      ]
+    },
+    {
+      "id": "socket-session-bus",
+      "category": "socket",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--socket=session-bus"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app broad access to desktop services and other apps over the session bus.",
+      "examples": [
+        "--socket=session-bus"
+      ]
+    },
+    {
+      "id": "socket-system-bus",
+      "category": "socket",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--socket=system-bus"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app broad access to system services over the system bus.",
+      "examples": [
+        "--socket=system-bus"
+      ]
+    },
+    {
+      "id": "device-dri",
+      "category": "device",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--device=dri"
+      },
+      "severity": "safe",
+      "description": "Allows the app to use graphics acceleration.",
+      "examples": [
+        "--device=dri"
+      ]
+    },
+    {
+      "id": "device-kvm",
+      "category": "device",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--device=kvm"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app to access hardware virtualisation support.",
+      "examples": [
+        "--device=kvm"
+      ]
+    },
+    {
+      "id": "device-shm",
+      "category": "device",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--device=shm"
+      },
+      "severity": "caution",
+      "description": "Allows the app to use shared memory in /dev/shm.",
+      "examples": [
+        "--device=shm"
+      ]
+    },
+    {
+      "id": "device-input",
+      "category": "device",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--device=input"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app to access input devices such as keyboards, mice or controllers.",
+      "examples": [
+        "--device=input"
+      ]
+    },
+    {
+      "id": "device-usb",
+      "category": "device",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--device=usb"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app unrestricted access to raw USB devices.",
+      "examples": [
+        "--device=usb"
+      ]
+    },
+    {
+      "id": "device-all",
+      "category": "device",
+      "priority": 100,
+      "match": {
+        "type": "exact",
+        "value": "--device=all"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app to access nearly all hardware devices.",
+      "examples": [
+        "--device=all"
+      ]
+    },
+    {
+      "id": "talk-name-specific",
+      "category": "dbus",
+      "priority": 85,
+      "match": {
+        "type": "regex",
+        "pattern": "^--talk-name=(?P<bus_name>[A-Za-z0-9_\\-]+(?:\\.[A-Za-z0-9_\\-*]+)+)$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to talk to the D-Bus service [bus_name].",
+      "examples": [
+        "--talk-name=org.freedesktop.Notifications",
+        "--talk-name=org.gtk.vfs.*"
+      ]
+    },
+    {
+      "id": "system-talk-name-specific",
+      "category": "dbus",
+      "priority": 90,
+      "match": {
+        "type": "regex",
+        "pattern": "^--system-talk-name=(?P<bus_name>[A-Za-z0-9_\\-]+(?:\\.[A-Za-z0-9_\\-*]+)+)$"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app to talk to the system D-Bus service [bus_name].",
+      "examples": [
+        "--system-talk-name=org.freedesktop.NetworkManager"
+      ]
+    },
+    {
+      "id": "own-name-specific",
+      "category": "dbus",
+      "priority": 86,
+      "match": {
+        "type": "regex",
+        "pattern": "^--own-name=(?P<bus_name>[A-Za-z0-9_\\-]+(?:\\.[A-Za-z0-9_\\-*]+)+)$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to own the D-Bus name [bus_name] and expose a service to other apps.",
+      "examples": [
+        "--own-name=org.example.Service"
+      ]
+    },
+    {
+      "id": "system-own-name-specific",
+      "category": "dbus",
+      "priority": 91,
+      "match": {
+        "type": "regex",
+        "pattern": "^--system-own-name=(?P<bus_name>[A-Za-z0-9_\\-]+(?:\\.[A-Za-z0-9_\\-*]+)+)$"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app to own the system D-Bus name [bus_name].",
+      "examples": [
+        "--system-own-name=org.example.SystemService"
+      ]
+    },
+    {
+      "id": "filesystem-home",
+      "category": "filesystem",
+      "priority": 120,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=home(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app to access most files in your home folder[mode_suffix].",
+      "examples": [
+        "--filesystem=home",
+        "--filesystem=home:ro"
+      ]
+    },
+    {
+      "id": "filesystem-host",
+      "category": "filesystem",
+      "priority": 130,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=host(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app to access a broad set of files from the host system[mode_suffix].",
+      "examples": [
+        "--filesystem=host",
+        "--filesystem=host:ro"
+      ]
+    },
+    {
+      "id": "filesystem-host-os",
+      "category": "filesystem",
+      "priority": 128,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=host-os(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app to access core operating system files from the host[mode_suffix].",
+      "examples": [
+        "--filesystem=host-os",
+        "--filesystem=host-os:ro"
+      ]
+    },
+    {
+      "id": "filesystem-host-etc",
+      "category": "filesystem",
+      "priority": 128,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=host-etc(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app to access the host system configuration in /etc[mode_suffix].",
+      "examples": [
+        "--filesystem=host-etc",
+        "--filesystem=host-etc:ro"
+      ]
+    },
+    {
+      "id": "filesystem-xdg-desktop",
+      "category": "filesystem",
+      "priority": 95,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=xdg-desktop(?:/(?P<subpath>[^:]+))?(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access your [Desktop] folder[path_suffix][mode_suffix].",
+      "examples": [
+        "--filesystem=xdg-desktop",
+        "--filesystem=xdg-desktop:ro",
+        "--filesystem=xdg-desktop/example"
+      ]
+    },
+    {
+      "id": "filesystem-xdg-documents",
+      "category": "filesystem",
+      "priority": 95,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=xdg-documents(?:/(?P<subpath>[^:]+))?(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access your [Documents] folder[path_suffix][mode_suffix].",
+      "examples": [
+        "--filesystem=xdg-documents",
+        "--filesystem=xdg-documents:ro",
+        "--filesystem=xdg-documents/example"
+      ]
+    },
+    {
+      "id": "filesystem-xdg-download",
+      "category": "filesystem",
+      "priority": 95,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=xdg-download(?:/(?P<subpath>[^:]+))?(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access your [Downloads] folder[path_suffix][mode_suffix].",
+      "examples": [
+        "--filesystem=xdg-download",
+        "--filesystem=xdg-download:ro",
+        "--filesystem=xdg-download/example"
+      ]
+    },
+    {
+      "id": "filesystem-xdg-music",
+      "category": "filesystem",
+      "priority": 95,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=xdg-music(?:/(?P<subpath>[^:]+))?(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access your [Music] folder[path_suffix][mode_suffix].",
+      "examples": [
+        "--filesystem=xdg-music",
+        "--filesystem=xdg-music:ro",
+        "--filesystem=xdg-music/example"
+      ]
+    },
+    {
+      "id": "filesystem-xdg-pictures",
+      "category": "filesystem",
+      "priority": 95,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=xdg-pictures(?:/(?P<subpath>[^:]+))?(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access your [Pictures] folder[path_suffix][mode_suffix].",
+      "examples": [
+        "--filesystem=xdg-pictures",
+        "--filesystem=xdg-pictures:ro",
+        "--filesystem=xdg-pictures/example"
+      ]
+    },
+    {
+      "id": "filesystem-xdg-public-share",
+      "category": "filesystem",
+      "priority": 95,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=xdg-public-share(?:/(?P<subpath>[^:]+))?(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access your [Public] folder[path_suffix][mode_suffix].",
+      "examples": [
+        "--filesystem=xdg-public-share",
+        "--filesystem=xdg-public-share:ro",
+        "--filesystem=xdg-public-share/example"
+      ]
+    },
+    {
+      "id": "filesystem-xdg-videos",
+      "category": "filesystem",
+      "priority": 95,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=xdg-videos(?:/(?P<subpath>[^:]+))?(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access your [Videos] folder[path_suffix][mode_suffix].",
+      "examples": [
+        "--filesystem=xdg-videos",
+        "--filesystem=xdg-videos:ro",
+        "--filesystem=xdg-videos/example"
+      ]
+    },
+    {
+      "id": "filesystem-xdg-templates",
+      "category": "filesystem",
+      "priority": 95,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=xdg-templates(?:/(?P<subpath>[^:]+))?(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access your [Templates] folder[path_suffix][mode_suffix].",
+      "examples": [
+        "--filesystem=xdg-templates",
+        "--filesystem=xdg-templates:ro",
+        "--filesystem=xdg-templates/example"
+      ]
+    },
+    {
+      "id": "filesystem-xdg-config",
+      "category": "filesystem",
+      "priority": 92,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=xdg-config(?:/(?P<subpath>[^:]+))?(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access your [config] folder[path_suffix][mode_suffix].",
+      "examples": [
+        "--filesystem=xdg-config",
+        "--filesystem=xdg-config:ro",
+        "--filesystem=xdg-config/example"
+      ]
+    },
+    {
+      "id": "filesystem-xdg-cache",
+      "category": "filesystem",
+      "priority": 92,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=xdg-cache(?:/(?P<subpath>[^:]+))?(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access your [cache] folder[path_suffix][mode_suffix].",
+      "examples": [
+        "--filesystem=xdg-cache",
+        "--filesystem=xdg-cache:ro",
+        "--filesystem=xdg-cache/example"
+      ]
+    },
+    {
+      "id": "filesystem-xdg-data",
+      "category": "filesystem",
+      "priority": 92,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=xdg-data(?:/(?P<subpath>[^:]+))?(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access your [data] folder[path_suffix][mode_suffix].",
+      "examples": [
+        "--filesystem=xdg-data",
+        "--filesystem=xdg-data:ro",
+        "--filesystem=xdg-data/example"
+      ]
+    },
+    {
+      "id": "filesystem-xdg-run-gvfsd",
+      "category": "filesystem",
+      "priority": 104,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=xdg-run/gvfsd(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to use gvfs runtime sockets for non-native file access[mode_suffix].",
+      "examples": [
+        "--filesystem=xdg-run/gvfsd"
+      ]
+    },
+    {
+      "id": "filesystem-xdg-run-gvfs",
+      "category": "filesystem",
+      "priority": 103,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=xdg-run/gvfs(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access gvfs FUSE mounts[mode_suffix].",
+      "examples": [
+        "--filesystem=xdg-run/gvfs"
+      ]
+    },
+    {
+      "id": "filesystem-xdg-run-dconf",
+      "category": "filesystem",
+      "priority": 103,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=xdg-run/dconf(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access the dconf runtime socket[mode_suffix].",
+      "examples": [
+        "--filesystem=xdg-run/dconf"
+      ]
+    },
+    {
+      "id": "filesystem-xdg-run-generic",
+      "category": "filesystem",
+      "priority": 82,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=xdg-run/(?P<run_path>[^:]+)(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access the runtime directory path [run_path][mode_suffix].",
+      "examples": [
+        "--filesystem=xdg-run/app",
+        "--filesystem=xdg-run/some-service:ro"
+      ]
+    },
+    {
+      "id": "filesystem-home-subdir",
+      "category": "filesystem",
+      "priority": 90,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=~/(?P<home_path>[^:]+)(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access the folder ~/[home_path][mode_suffix].",
+      "examples": [
+        "--filesystem=~/Projects",
+        "--filesystem=~/.config/dconf:ro"
+      ]
+    },
+    {
+      "id": "filesystem-absolute-boot",
+      "category": "filesystem",
+      "priority": 121,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=/boot(?P<subpath>/[^:]+)?(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app to access boot files on the host[path_suffix][mode_suffix].",
+      "examples": [
+        "--filesystem=/boot",
+        "--filesystem=/boot:ro"
+      ]
+    },
+    {
+      "id": "filesystem-absolute-efi",
+      "category": "filesystem",
+      "priority": 121,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=/efi(?P<subpath>/[^:]+)?(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app to access EFI system files[path_suffix][mode_suffix].",
+      "examples": [
+        "--filesystem=/efi",
+        "--filesystem=/efi:ro"
+      ]
+    },
+    {
+      "id": "filesystem-absolute-root",
+      "category": "filesystem",
+      "priority": 122,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=/root(?P<subpath>/[^:]+)?(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app to access the root user's files[path_suffix][mode_suffix].",
+      "examples": [
+        "--filesystem=/root",
+        "--filesystem=/root:ro"
+      ]
+    },
+    {
+      "id": "filesystem-absolute-sys",
+      "category": "filesystem",
+      "priority": 122,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=/sys(?P<subpath>/[^:]+)?(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app to access system device and kernel information under /sys[path_suffix][mode_suffix].",
+      "examples": [
+        "--filesystem=/sys",
+        "--filesystem=/sys/block:ro"
+      ]
+    },
+    {
+      "id": "filesystem-absolute-tmp",
+      "category": "filesystem",
+      "priority": 110,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=/tmp(?P<subpath>/[^:]+)?(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access temporary files on the host[path_suffix][mode_suffix].",
+      "examples": [
+        "--filesystem=/tmp",
+        "--filesystem=/tmp:ro"
+      ]
+    },
+    {
+      "id": "filesystem-absolute-var",
+      "category": "filesystem",
+      "priority": 121,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=/var(?P<subpath>/[^:]+)?(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app to access host files under /var[path_suffix][mode_suffix].",
+      "examples": [
+        "--filesystem=/var",
+        "--filesystem=/var/tmp"
+      ]
+    },
+    {
+      "id": "filesystem-absolute-var-lib-flatpak",
+      "category": "filesystem",
+      "priority": 123,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=/var/lib/flatpak(?P<subpath>/[^:]+)?(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app to access Flatpak's system data[path_suffix][mode_suffix].",
+      "examples": [
+        "--filesystem=/var/lib/flatpak:ro"
+      ]
+    },
+    {
+      "id": "filesystem-absolute-run",
+      "category": "filesystem",
+      "priority": 111,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=/run(?P<subpath>/(?!flatpak(?:/|$)|host(?:/|$))[^:]+)?(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access host runtime files under /run[path_suffix][mode_suffix].",
+      "examples": [
+        "--filesystem=/run/user/1000/my-socket"
+      ]
+    },
+    {
+      "id": "filesystem-absolute-var-run",
+      "category": "filesystem",
+      "priority": 108,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=/var/run(?P<subpath>/[^:]+)?(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access runtime files under /var/run[path_suffix][mode_suffix].",
+      "examples": [
+        "--filesystem=/var/run/cups/cups.sock"
+      ]
+    },
+    {
+      "id": "filesystem-absolute-generic",
+      "category": "filesystem",
+      "priority": 70,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=/(?P<abs_path>(?!app(?:/|$)|bin(?:/|$)|dev(?:/|$)|etc(?:/|$)|lib(?:/|$)|lib32(?:/|$)|lib64(?:/|$)|proc(?:/|$)|run/flatpak(?:/|$)|run/host(?:/|$)|sbin(?:/|$)|usr(?:/|$))[^:]+)(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access the host path /[abs_path][mode_suffix].",
+      "examples": [
+        "--filesystem=/media",
+        "--filesystem=/srv/share:ro"
+      ]
+    },
+    {
+      "id": "persist-all",
+      "category": "persist",
+      "priority": 118,
+      "match": {
+        "type": "regex",
+        "pattern": "^--persist=\\.$"
+      },
+      "severity": "sensitive",
+      "description": "Persists all home-directory paths that the sandbox would otherwise treat as temporary.",
+      "examples": [
+        "--persist=."
+      ]
+    },
+    {
+      "id": "persist-specific",
+      "category": "persist",
+      "priority": 88,
+      "match": {
+        "type": "regex",
+        "pattern": "^--persist=(?P<persist_path>[^:]+)$"
+      },
+      "severity": "caution",
+      "description": "Persists the sandbox path [persist_path] between runs.",
+      "examples": [
+        "--persist=.foo",
+        "--persist=.config/MyApp"
+      ]
+    },
+    {
+      "id": "usb-all",
+      "category": "usb",
+      "priority": 115,
+      "match": {
+        "type": "regex",
+        "pattern": "^--usb=all$"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app to enumerate all USB devices through the USB portal.",
+      "examples": [
+        "--usb=all"
+      ]
+    },
+    {
+      "id": "nousb-all",
+      "category": "usb",
+      "priority": 115,
+      "match": {
+        "type": "regex",
+        "pattern": "^--nousb=all$"
+      },
+      "severity": "safe",
+      "description": "Hides all USB devices from the app's USB portal enumeration list.",
+      "examples": [
+        "--nousb=all"
+      ]
+    },
+    {
+      "id": "usb-vendor-device-class",
+      "category": "usb",
+      "priority": 96,
+      "match": {
+        "type": "regex",
+        "pattern": "^--usb=vnd:(?P<vendor>[0-9A-Fa-f]{4})(?:\\+dev:(?P<device>[0-9A-Fa-f]{4}))?(?:\\+cls:(?P<class>[0-9A-Fa-f]{2}):(?P<subclass>[0-9A-Fa-f*]{1,2}))?$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to enumerate matching USB devices from vendor [vendor][device_suffix][class_suffix].",
+      "examples": [
+        "--usb=vnd:1234",
+        "--usb=vnd:1234+dev:3456",
+        "--usb=vnd:1234+cls:06:*"
+      ]
+    },
+    {
+      "id": "usb-class",
+      "category": "usb",
+      "priority": 95,
+      "match": {
+        "type": "regex",
+        "pattern": "^--usb=cls:(?P<class>[0-9A-Fa-f]{2}):(?P<subclass>[0-9A-Fa-f*]{1,2})$"
+      },
+      "severity": "caution",
+      "description": "Allows the app to enumerate USB devices in class [class] subclass [subclass].",
+      "examples": [
+        "--usb=cls:06:*"
+      ]
+    },
+    {
+      "id": "nousb-vendor-device-class",
+      "category": "usb",
+      "priority": 96,
+      "match": {
+        "type": "regex",
+        "pattern": "^--nousb=vnd:(?P<vendor>[0-9A-Fa-f]{4})(?:\\+dev:(?P<device>[0-9A-Fa-f]{4}))?(?:\\+cls:(?P<class>[0-9A-Fa-f]{2}):(?P<subclass>[0-9A-Fa-f*]{1,2}))?$"
+      },
+      "severity": "safe",
+      "description": "Excludes matching USB devices from the app's USB portal enumeration list.",
+      "examples": [
+        "--nousb=vnd:1234",
+        "--nousb=vnd:1234+dev:3456"
+      ]
+    },
+    {
+      "id": "nousb-class",
+      "category": "usb",
+      "priority": 95,
+      "match": {
+        "type": "regex",
+        "pattern": "^--nousb=cls:(?P<class>[0-9A-Fa-f]{2}):(?P<subclass>[0-9A-Fa-f*]{1,2})$"
+      },
+      "severity": "safe",
+      "description": "Excludes USB devices in class [class] subclass [subclass] from enumeration.",
+      "examples": [
+        "--nousb=cls:06:*"
+      ]
+    },
+    {
+      "id": "usb-list-inline",
+      "category": "usb",
+      "priority": 72,
+      "match": {
+        "type": "regex",
+        "pattern": "^--usb-list=(?P<usb_list>.+)$"
+      },
+      "severity": "caution",
+      "description": "Supplies an inline USB allow/deny list for portal-based enumeration.",
+      "examples": [
+        "--usb-list=vnd:1234;!vnd:9999+dev:0001"
+      ]
+    },
+    {
+      "id": "usb-list-file",
+      "category": "usb",
+      "priority": 72,
+      "match": {
+        "type": "regex",
+        "pattern": "^--usb-list-file=(?P<usb_file>.+)$"
+      },
+      "severity": "caution",
+      "description": "Loads a USB allow/deny list from the file [usb_file].",
+      "examples": [
+        "--usb-list-file=/path/to/usb-rules.txt"
+      ]
+    },
+    {
+      "id": "env-dconf-user-config-dir",
+      "category": "env",
+      "priority": 84,
+      "match": {
+        "type": "regex",
+        "pattern": "^--env=DCONF_USER_CONFIG_DIR=(?P<env_value>.+)$"
+      },
+      "severity": "caution",
+      "description": "Sets the DConf user config directory to [env_value].",
+      "examples": [
+        "--env=DCONF_USER_CONFIG_DIR=.config/dconf"
+      ]
+    },
+    {
+      "id": "env-gio-extra-modules",
+      "category": "env",
+      "priority": 84,
+      "match": {
+        "type": "regex",
+        "pattern": "^--env=GIO_EXTRA_MODULES=(?P<env_value>.+)$"
+      },
+      "severity": "caution",
+      "description": "Sets extra GIO module lookup paths to [env_value].",
+      "examples": [
+        "--env=GIO_EXTRA_MODULES=/app/lib/gio/modules/"
+      ]
+    },
+    {
+      "id": "env-generic",
+      "category": "env",
+      "priority": 60,
+      "match": {
+        "type": "regex",
+        "pattern": "^--env=(?P<env_name>[A-Za-z_][A-Za-z0-9_]*)=(?P<env_value>.*)$"
+      },
+      "severity": "caution",
+      "description": "Sets the environment variable [env_name] to [env_value] inside the sandbox.",
+      "examples": [
+        "--env=FOO=bar"
+      ]
+    },
+    {
+      "id": "metadata-dconf-migrate-path",
+      "category": "metadata",
+      "priority": 83,
+      "match": {
+        "type": "regex",
+        "pattern": "^--metadata=X-DConf=migrate-path=(?P<migrate_path>/.+)$"
+      },
+      "severity": "caution",
+      "description": "Requests migration of host DConf settings from [migrate_path] into the sandbox.",
+      "examples": [
+        "--metadata=X-DConf=migrate-path=/org/example/foo/"
+      ]
+    },
+    {
+      "id": "metadata-generic",
+      "category": "metadata",
+      "priority": 55,
+      "match": {
+        "type": "regex",
+        "pattern": "^--metadata=(?P<meta_key>[^=]+)=(?P<meta_value>.+)$"
+      },
+      "severity": "caution",
+      "description": "Sets Flatpak metadata [meta_key] to [meta_value].",
+      "examples": [
+        "--metadata=KEY=value"
+      ]
+    },
+    {
+      "id": "talk-name-ca-desrt-dconf",
+      "category": "dbus",
+      "priority": 106,
+      "match": {
+        "type": "exact",
+        "value": "--talk-name=ca.desrt.dconf"
+      },
+      "severity": "caution",
+      "description": "Allows the app to talk directly to the dconf service.",
+      "examples": [
+        "--talk-name=ca.desrt.dconf"
+      ]
+    },
+    {
+      "id": "talk-name-org-gtk-vfs-wildcard",
+      "category": "dbus",
+      "priority": 106,
+      "match": {
+        "type": "exact",
+        "value": "--talk-name=org.gtk.vfs.*"
+      },
+      "severity": "caution",
+      "description": "Allows the app to talk to gvfs services over D-Bus.",
+      "examples": [
+        "--talk-name=org.gtk.vfs.*"
+      ]
+    },
+    {
+      "id": "filesystem-home-config-dconf-ro",
+      "category": "filesystem",
+      "priority": 106,
+      "match": {
+        "type": "exact",
+        "value": "--filesystem=~/.config/dconf:ro"
+      },
+      "severity": "caution",
+      "description": "Allows the app to read your dconf configuration directory.",
+      "examples": [
+        "--filesystem=~/.config/dconf:ro"
+      ]
+    },
+    {
+      "id": "filesystem-xdg-run-dconf-exact",
+      "category": "filesystem",
+      "priority": 106,
+      "match": {
+        "type": "exact",
+        "value": "--filesystem=xdg-run/dconf"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access the dconf runtime socket.",
+      "examples": [
+        "--filesystem=xdg-run/dconf"
+      ]
+    },
+    {
+      "id": "filesystem-xdg-run-gvfsd-exact",
+      "category": "filesystem",
+      "priority": 106,
+      "match": {
+        "type": "exact",
+        "value": "--filesystem=xdg-run/gvfsd"
+      },
+      "severity": "caution",
+      "description": "Allows the app to use gvfs runtime sockets for non-native file access.",
+      "examples": [
+        "--filesystem=xdg-run/gvfsd"
+      ]
+    },
+    {
+      "id": "filesystem-xdg-run-gvfs-exact",
+      "category": "filesystem",
+      "priority": 106,
+      "match": {
+        "type": "exact",
+        "value": "--filesystem=xdg-run/gvfs"
+      },
+      "severity": "caution",
+      "description": "Allows the app to access gvfs FUSE mounts.",
+      "examples": [
+        "--filesystem=xdg-run/gvfs"
+      ]
+    },
+    {
+      "id": "filesystem-home-var-app",
+      "category": "filesystem",
+      "priority": 119,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=~/.var/app(?P<subpath>/[^:]+)?(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app to access Flatpak app data under ~/.var/app[path_suffix][mode_suffix].",
+      "examples": [
+        "--filesystem=~/.var/app:ro",
+        "--filesystem=~/.local/share/flatpak:ro"
+      ]
+    },
+    {
+      "id": "filesystem-home-local-share-flatpak",
+      "category": "filesystem",
+      "priority": 119,
+      "match": {
+        "type": "regex",
+        "pattern": "^--filesystem=~/.local/share/flatpak(?P<subpath>/[^:]+)?(?::(?P<mode>ro|create))?$"
+      },
+      "severity": "sensitive",
+      "description": "Allows the app to access user Flatpak data under ~/.local/share/flatpak[path_suffix][mode_suffix].",
+      "examples": [
+        "--filesystem=~/.var/app:ro",
+        "--filesystem=~/.local/share/flatpak:ro"
+      ]
+    }
+  ]
+}

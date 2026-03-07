@@ -13,6 +13,7 @@ import SubmitVersion from './pages/SubmitVersion';
 import SubmissionDetail from './pages/SubmissionDetail';
 import ReviewQueue from './pages/ReviewQueue';
 import ReviewDetail from './pages/ReviewDetail';
+import InstallApp from './pages/InstallApp';
 import AuthCallback from './pages/AuthCallback';
 
 const queryClient = new QueryClient({
@@ -52,6 +53,7 @@ function AppRoutes() {
         <Route path="/" element={<Home />} />
         <Route path="/apps" element={<Browse />} />
         <Route path="/apps/:appId" element={<AppDetail />} />
+        <Route path="/apps/:appId/install" element={<InstallApp />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route
           path="/my/apps"

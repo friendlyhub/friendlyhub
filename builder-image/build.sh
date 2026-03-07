@@ -55,6 +55,12 @@ flatpak-builder \
 
 echo ">>> Build complete."
 
+# Extract sizes from the build output
+INSTALLED_SIZE=$(du -sb "${BUILD_DIR}/files" 2>/dev/null | cut -f1)
+DOWNLOAD_SIZE=$(du -sb "${REPO_DIR}" 2>/dev/null | cut -f1)
+echo ">>> Installed size: ${INSTALLED_SIZE:-unknown} bytes"
+echo ">>> Download size: ${DOWNLOAD_SIZE:-unknown} bytes"
+
 # Step 2: Create a build in flat-manager
 echo ">>> Creating flat-manager build..."
 BUILD_RESPONSE=$(curl -s -X POST \
@@ -122,15 +128,23 @@ fi
 echo ">>> Notifying FriendlyHub..."
 GHA_RUN_URL="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-unknown}/actions/runs/${GITHUB_RUN_ID:-0}"
 
-curl -s -X POST "${FRIENDLYHUB_API_URL}/api/v1/webhooks/build-complete" \
-    -H "Content-Type: application/json" \
-    -H "x-webhook-secret: ${WEBHOOK_SECRET}" \
-    -d "{
+WEBHOOK_BODY="{
         \"submission_id\": \"${SUBMISSION_ID}\",
         \"result\": \"success\",
         \"fm_build_id\": ${FM_BUILD_ID},
-        \"build_log_url\": \"${GHA_RUN_URL}\"
-    }"
+        \"build_log_url\": \"${GHA_RUN_URL}\""
+if [ -n "${DOWNLOAD_SIZE}" ]; then
+    WEBHOOK_BODY="${WEBHOOK_BODY}, \"download_size\": ${DOWNLOAD_SIZE}"
+fi
+if [ -n "${INSTALLED_SIZE}" ]; then
+    WEBHOOK_BODY="${WEBHOOK_BODY}, \"installed_size\": ${INSTALLED_SIZE}"
+fi
+WEBHOOK_BODY="${WEBHOOK_BODY} }"
+
+curl -s -X POST "${FRIENDLYHUB_API_URL}/api/v1/webhooks/build-complete" \
+    -H "Content-Type: application/json" \
+    -H "x-webhook-secret: ${WEBHOOK_SECRET}" \
+    -d "${WEBHOOK_BODY}"
 
 echo ""
 echo "=== Build pipeline complete ==="

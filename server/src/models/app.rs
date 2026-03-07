@@ -31,6 +31,9 @@ pub struct App {
     pub project_license: Option<String>,
     pub keywords: Vec<String>,
     pub finish_args: Vec<String>,
+    pub download_size: Option<i64>,
+    pub installed_size: Option<i64>,
+    pub install_count: i64,
     pub is_published: bool,
     pub is_verified: bool,
     pub created_at: DateTime<Utc>,
@@ -59,9 +62,13 @@ pub struct AppResponse {
     pub project_license: Option<String>,
     pub keywords: Vec<String>,
     pub finish_args: Vec<String>,
+    pub download_size: Option<i64>,
+    pub installed_size: Option<i64>,
+    pub install_count: i64,
     pub is_published: bool,
     pub is_verified: bool,
     pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 impl From<App> for AppResponse {
@@ -87,9 +94,13 @@ impl From<App> for AppResponse {
             project_license: a.project_license,
             keywords: a.keywords,
             finish_args: a.finish_args,
+            download_size: a.download_size,
+            installed_size: a.installed_size,
+            install_count: a.install_count,
             is_published: a.is_published,
             is_verified: a.is_verified,
             created_at: a.created_at,
+            updated_at: a.updated_at,
         }
     }
 }
@@ -179,6 +190,13 @@ impl App {
         if !self.finish_args.is_empty() {
             item.insert("finish_args".into(), helpers::string_list_to_av(&self.finish_args));
         }
+        if let Some(s) = self.download_size {
+            item.insert("download_size".into(), AttributeValue::N(s.to_string()));
+        }
+        if let Some(s) = self.installed_size {
+            item.insert("installed_size".into(), AttributeValue::N(s.to_string()));
+        }
+        item.insert("install_count".into(), AttributeValue::N(self.install_count.to_string()));
         item.insert("is_published".into(), AttributeValue::Bool(self.is_published));
         item.insert("is_verified".into(), AttributeValue::Bool(self.is_verified));
         item.insert("created_at".into(), AttributeValue::S(self.created_at.to_rfc3339()));
@@ -214,6 +232,9 @@ impl App {
             project_license: helpers::get_string_opt(item, "project_license"),
             keywords: helpers::get_string_list(item, "keywords"),
             finish_args: helpers::get_string_list(item, "finish_args"),
+            download_size: helpers::get_i64_opt(item, "download_size"),
+            installed_size: helpers::get_i64_opt(item, "installed_size"),
+            install_count: helpers::get_i64_opt(item, "install_count").unwrap_or(0),
             is_published: helpers::get_bool(item, "is_published"),
             is_verified: helpers::get_bool(item, "is_verified"),
             created_at: helpers::get_datetime(item, "created_at")?,
@@ -245,6 +266,9 @@ pub async fn create(db: &Db, owner_id: Uuid, input: &CreateApp) -> Result<App, A
         project_license: None,
         keywords: Vec::new(),
         finish_args: Vec::new(),
+        download_size: None,
+        installed_size: None,
+        install_count: 0,
         is_published: false,
         is_verified: false,
         created_at: now,
@@ -458,6 +482,50 @@ pub async fn update_from_appstream(
         .await
         .map_err(|e| AppError::Internal(format!("DynamoDB put_item failed: {e}")))?;
 
+    Ok(())
+}
+
+pub async fn update_sizes(
+    db: &Db,
+    id: Uuid,
+    download_size: Option<i64>,
+    installed_size: Option<i64>,
+) -> Result<(), AppError> {
+    let mut app = find_by_id(db, id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("App not found".into()))?;
+
+    if let Some(s) = download_size {
+        app.download_size = Some(s);
+    }
+    if let Some(s) = installed_size {
+        app.installed_size = Some(s);
+    }
+    app.updated_at = Utc::now();
+
+    db.client
+        .put_item()
+        .table_name(&db.table)
+        .set_item(Some(app.to_item()))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("DynamoDB put_item failed: {e}")))?;
+
+    Ok(())
+}
+
+pub async fn increment_install_count(db: &Db, id: Uuid, delta: i64) -> Result<(), AppError> {
+    let key = format!("APP#{id}");
+    db.client
+        .update_item()
+        .table_name(&db.table)
+        .key("PK", AttributeValue::S(key.clone()))
+        .key("SK", AttributeValue::S(key))
+        .update_expression("ADD install_count :delta")
+        .expression_attribute_values(":delta", AttributeValue::N(delta.to_string()))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("DynamoDB update_item failed: {e}")))?;
     Ok(())
 }
 

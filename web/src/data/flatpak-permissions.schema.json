@@ -1,0 +1,99 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Flatpak Permission Catalogue",
+  "type": "object",
+  "required": [
+    "version",
+    "source",
+    "permissions"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer"
+    },
+    "source": {
+      "type": "string"
+    },
+    "permissions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "category",
+          "priority",
+          "match",
+          "severity",
+          "description"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "share",
+              "socket",
+              "device",
+              "filesystem",
+              "dbus",
+              "persist",
+              "usb",
+              "allow",
+              "env",
+              "metadata"
+            ]
+          },
+          "priority": {
+            "type": "integer"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "safe",
+              "caution",
+              "sensitive"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "examples": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "match": {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "exact",
+                  "regex"
+                ]
+              },
+              "value": {
+                "type": "string"
+              },
+              "pattern": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}
