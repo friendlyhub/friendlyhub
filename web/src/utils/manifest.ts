@@ -193,14 +193,18 @@ export type Manifest = {
   [key: string]: unknown;
 };
 
-// Normalize manifest: convert app-id to id
+// Normalize manifest: convert deprecated app-id to id
 export function normalizeManifest(m: Record<string, unknown>): Manifest {
-  const result = { ...m } as Manifest;
-  if (result['app-id'] && !result.id) {
-    result.id = result['app-id'] as string;
-    delete result['app-id'];
+  if (!('app-id' in m) || 'id' in m) return { ...m } as Manifest;
+  const result: Record<string, unknown> = {};
+  for (const key of Object.keys(m)) {
+    if (key === 'app-id') {
+      result['id'] = m['app-id'];
+    } else {
+      result[key] = m[key];
+    }
   }
-  return result;
+  return result as Manifest;
 }
 
 // Get the effective app ID from a manifest

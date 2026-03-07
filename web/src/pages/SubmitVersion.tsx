@@ -2,11 +2,11 @@ import { useState, useCallback, useRef, useMemo } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { FileCode, FormInput, AlertTriangle } from 'lucide-react';
-import yaml from 'js-yaml';
+import YAML from 'yaml';
 import { getApp, submitApp } from '../api/client';
 import ManifestForm from '../components/ManifestForm';
 import ManifestEditor, { type EditorFormat } from '../components/ManifestEditor';
-import { createBlankManifest, normalizeManifest, validateRequired, type Manifest } from '../utils/manifest';
+import { createBlankManifest, getManifestAppId, normalizeManifest, validateRequired, type Manifest } from '../utils/manifest';
 
 function exampleMetainfo(appId: string, name: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -46,7 +46,16 @@ function serializeManifest(m: Manifest, format: EditorFormat): string {
   if (format === 'json') {
     return JSON.stringify(m, null, 2);
   }
-  return yaml.dump(m, { indent: 2, lineWidth: -1, noRefs: true, quotingType: '"' });
+  return YAML.stringify(m, { indent: 2, lineWidth: 0 });
+}
+
+// Replace deprecated app-id with id in-place (text-level to preserve formatting)
+function normalizeAppIdInText(text: string): string {
+  // YAML: `app-id:` at start of line
+  // JSON: `"app-id"`
+  return text
+    .replace(/^(\s*)app-id(\s*:)/m, '$1id$2')
+    .replace(/"app-id"/g, '"id"');
 }
 
 function parseManifestText(text: string): Record<string, unknown> | null {
@@ -56,7 +65,7 @@ function parseManifestText(text: string): Record<string, unknown> | null {
     return JSON.parse(trimmed) as Record<string, unknown>;
   } catch { /* not JSON */ }
   try {
-    const result = yaml.load(trimmed);
+    const result = YAML.parse(trimmed);
     if (result && typeof result === 'object') return result as Record<string, unknown>;
   } catch { /* not YAML */ }
   return null;
@@ -109,11 +118,15 @@ export default function SubmitVersion() {
 
     debounceRef.current = setTimeout(() => {
       updateSourceRef.current = 'editor';
-      const parsed = parseManifestText(text);
+      const normalized = normalizeAppIdInText(text);
+      if (normalized !== text) {
+        setEditorText(normalized);
+      }
+      const parsed = parseManifestText(normalized);
       if (parsed) {
-        setManifest(normalizeManifest(parsed));
+        setManifest(parsed as Manifest);
         setParseError(null);
-      } else if (text.trim()) {
+      } else if (normalized.trim()) {
         setParseError('Invalid manifest. Must be valid JSON or YAML.');
       }
     }, 400);
@@ -126,11 +139,12 @@ export default function SubmitVersion() {
 
   // File load
   const handleLoadFile = useCallback((text: string, detectedFormat: EditorFormat) => {
+    const normalized = normalizeAppIdInText(text);
     setEditorFormat(detectedFormat);
-    setEditorText(text);
-    const parsed = parseManifestText(text);
+    setEditorText(normalized);
+    const parsed = parseManifestText(normalized);
     if (parsed) {
-      setManifest(normalizeManifest(parsed));
+      setManifest(parsed as Manifest);
       setParseError(null);
     } else {
       setParseError('Could not parse the uploaded file.');
@@ -139,13 +153,14 @@ export default function SubmitVersion() {
 
   // Validation
   const missingFields = useMemo(() => validateRequired(manifest), [manifest]);
-  const appIdMismatch = manifest.id !== undefined && manifest.id !== appId;
+  const manifestAppId = getManifestAppId(manifest);
+  const appIdMismatch = manifestAppId !== '' && manifestAppId !== appId;
 
   // Submission
   const mutation = useMutation({
     mutationFn: () => {
       setSubmitError(null);
-      return submitApp(appId!, version, manifest, metainfoText, sourceFiles);
+      return submitApp(appId!, version, normalizeManifest(manifest), metainfoText, sourceFiles);
     },
     onSuccess: (result) => {
       navigate(`/my/submissions/${result.id}`);
@@ -213,27 +228,75 @@ export default function SubmitVersion() {
         </div>
       </div>
 
-      {/* Dual-pane editor */}
-      <div className="flex">
-        {/* Form pane (left) */}
-        <div className={`lg:w-1/2 lg:block ${mobileView === 'form' ? 'w-full' : 'hidden'} bg-white`}>
-          <ManifestForm
-            manifest={manifest}
-            onChange={handleFormChange}
-            lockedAppId={appId || ''}
-          />
+      {/* Manifest card */}
+      <div className="mx-4 sm:mx-6 mt-4 border border-gray-200 rounded-lg overflow-hidden">
+        <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
+          <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+            <FileCode className="w-4 h-4" />
+            Flatpak Manifest
+          </h2>
         </div>
 
-        {/* Editor pane (right) - sticky so it stays visible while form scrolls */}
-        <div className={`lg:w-1/2 lg:block ${mobileView === 'editor' ? 'w-full' : 'hidden'} lg:sticky lg:top-0 h-[calc(100vh-4rem)] lg:self-start`}>
-          <ManifestEditor
-            value={editorText}
-            format={editorFormat}
-            onChange={handleEditorChange}
-            onFormatChange={handleFormatChange}
-            parseError={parseError}
-            onLoadFile={handleLoadFile}
-          />
+        <div className="flex relative">
+          {/* Form pane (left) */}
+          <div
+            className={`lg:block ${mobileView === 'form' ? 'w-full' : 'hidden'} bg-white overflow-y-auto`}
+            style={{ width: 'var(--form-width, 50%)' }}
+          >
+            <ManifestForm
+              manifest={manifest}
+              onChange={handleFormChange}
+              lockedAppId={appId || ''}
+            />
+          </div>
+
+          {/* Drag handle */}
+          <div
+            className="hidden lg:flex w-1.5 cursor-col-resize items-center justify-center bg-gray-100 border-x border-gray-200 hover:bg-emerald-100 active:bg-emerald-200 transition-colors select-none shrink-0"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              const container = e.currentTarget.parentElement!;
+              const startX = e.clientX;
+              const containerRect = container.getBoundingClientRect();
+              const startPct = parseFloat(
+                getComputedStyle(container).getPropertyValue('--form-width') || '50'
+              );
+              const startWidth = (startPct / 100) * containerRect.width;
+
+              const onMouseMove = (ev: MouseEvent) => {
+                const delta = ev.clientX - startX;
+                const newWidth = startWidth + delta;
+                const pct = Math.min(80, Math.max(20, (newWidth / containerRect.width) * 100));
+                container.style.setProperty('--form-width', `${pct}%`);
+              };
+              const onMouseUp = () => {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+              };
+              document.body.style.cursor = 'col-resize';
+              document.body.style.userSelect = 'none';
+              document.addEventListener('mousemove', onMouseMove);
+              document.addEventListener('mouseup', onMouseUp);
+            }}
+          >
+            <div className="w-0.5 h-6 rounded-full bg-gray-300" />
+          </div>
+
+          {/* Editor pane (right) - sticky so it stays visible while form scrolls */}
+          <div
+            className={`lg:block ${mobileView === 'editor' ? 'w-full' : 'hidden'} lg:sticky lg:top-0 h-[calc(100vh-8rem)] lg:self-start flex-1 min-w-0`}
+          >
+            <ManifestEditor
+              value={editorText}
+              format={editorFormat}
+              onChange={handleEditorChange}
+              onFormatChange={handleFormatChange}
+              parseError={parseError}
+              onLoadFile={handleLoadFile}
+            />
+          </div>
         </div>
       </div>
 

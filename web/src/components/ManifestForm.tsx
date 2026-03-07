@@ -231,6 +231,53 @@ function SourceEditor({
   );
 }
 
+// External/shared module reference (string entry in modules array)
+function ExternalModuleEditor({
+  path,
+  onChange,
+  onRemove,
+}: {
+  path: string;
+  onChange: (val: string) => void;
+  onRemove: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const filename = path.split('/').pop() || path;
+
+  return (
+    <div className="border border-gray-200 rounded-lg bg-white">
+      <div
+        className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-gray-50 rounded-t-lg"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex items-center gap-2">
+          {expanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+          <span className="text-sm font-medium text-gray-700">{filename}</span>
+          <span className="text-xs text-gray-400">external module</span>
+        </div>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          className="text-red-400 hover:text-red-600"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      {expanded && (
+        <div className="px-3 pb-3 border-t border-gray-100 pt-3">
+          <label className="block text-xs font-medium text-gray-500 mb-0.5">Path</label>
+          <input
+            type="text"
+            value={path}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Module editor
 function ModuleEditor({
   module,
@@ -412,7 +459,8 @@ function AddFieldPicker({
 }
 
 export default function ManifestForm({ manifest, onChange, lockedAppId }: ManifestFormProps) {
-  const appIdMismatch = manifest.id && manifest.id !== lockedAppId;
+  const effectiveId = manifest.id || manifest['app-id'] || '';
+  const appIdMismatch = effectiveId !== '' && effectiveId !== lockedAppId;
 
   // Determine which optional fields are currently active in the manifest
   const activeOptionalKeys = new Set<string>();
@@ -524,22 +572,42 @@ export default function ManifestForm({ manifest, onChange, lockedAppId }: Manife
         <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
           Modules <span className="text-red-500">*</span>
         </h3>
-        {(manifest.modules || []).map((mod, i) => (
-          <ModuleEditor
-            key={`${i}-${mod.name}`}
-            module={mod}
-            index={i}
-            onChange={(m) => {
-              const next = [...(manifest.modules || [])];
-              next[i] = m;
-              updateField('modules', next);
-            }}
-            onRemove={() => {
-              const next = (manifest.modules || []).filter((_, j) => j !== i);
-              updateField('modules', next);
-            }}
-          />
-        ))}
+        {(manifest.modules || []).map((mod, i) => {
+          // String entries are references to external shared module files
+          if (typeof mod === 'string') {
+            return (
+              <ExternalModuleEditor
+                key={`${i}-ref`}
+                path={mod}
+                onChange={(val) => {
+                  const next = [...(manifest.modules || [])];
+                  next[i] = val as unknown as ManifestModule;
+                  updateField('modules', next);
+                }}
+                onRemove={() => {
+                  const next = (manifest.modules || []).filter((_, j) => j !== i);
+                  updateField('modules', next);
+                }}
+              />
+            );
+          }
+          return (
+            <ModuleEditor
+              key={`${i}-${mod.name}`}
+              module={mod}
+              index={i}
+              onChange={(m) => {
+                const next = [...(manifest.modules || [])];
+                next[i] = m;
+                updateField('modules', next);
+              }}
+              onRemove={() => {
+                const next = (manifest.modules || []).filter((_, j) => j !== i);
+                updateField('modules', next);
+              }}
+            />
+          );
+        })}
         <button
           type="button"
           onClick={() => {

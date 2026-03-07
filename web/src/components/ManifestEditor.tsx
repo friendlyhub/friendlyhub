@@ -2,7 +2,7 @@ import { useRef, useCallback, useEffect, useState } from 'react';
 import * as monaco from 'monaco-editor';
 import { configureMonacoYaml } from 'monaco-yaml';
 
-import yaml from 'js-yaml';
+import YAML from 'yaml';
 import { Upload } from 'lucide-react';
 import flatpakSchema from '../data/flatpak-manifest.schema.json';
 
@@ -98,6 +98,7 @@ export default function ManifestEditor({
   const [converting, setConverting] = useState(false);
   const onChangeRef = useRef(onChange);
   const formatRef = useRef(format);
+  const suppressSyncRef = useRef(false);
   onChangeRef.current = onChange;
   formatRef.current = format;
 
@@ -118,6 +119,7 @@ export default function ManifestEditor({
       wordWrap: 'on',
       tabSize: 2,
       automaticLayout: true,
+      links: false,
       suggest: {
         showKeywords: true,
         showSnippets: true,
@@ -130,6 +132,7 @@ export default function ManifestEditor({
     });
 
     ed.onDidChangeModelContent(() => {
+      if (suppressSyncRef.current) return;
       const val = ed.getValue();
       onChangeRef.current(val, formatRef.current);
     });
@@ -144,6 +147,18 @@ export default function ManifestEditor({
     // Only run on mount/unmount -- value is initial only
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Sync external value changes (from form) into the editor
+  useEffect(() => {
+    const ed = editorRef.current;
+    if (!ed) return;
+    const currentValue = ed.getValue();
+    if (value !== currentValue) {
+      suppressSyncRef.current = true;
+      ed.setValue(value);
+      suppressSyncRef.current = false;
+    }
+  }, [value]);
 
   // When format changes, swap the model URI so the correct schema fileMatch applies
   useEffect(() => {
@@ -173,14 +188,14 @@ export default function ManifestEditor({
       if (format === 'json') {
         obj = JSON.parse(currentValue);
       } else {
-        obj = yaml.load(currentValue);
+        obj = YAML.parse(currentValue);
       }
 
       let newText: string;
       if (newFormat === 'json') {
         newText = JSON.stringify(obj, null, 2);
       } else {
-        newText = yaml.dump(obj, { indent: 2, lineWidth: -1, noRefs: true, quotingType: '"' });
+        newText = YAML.stringify(obj, { indent: 2, lineWidth: 0 });
       }
 
       onFormatChange(newFormat);

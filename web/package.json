@@ -12,13 +12,13 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "js-yaml": "^4.1.1",
     "lucide-react": "^0.577.0",
     "monaco-editor": "~0.52.2",
     "monaco-yaml": "^5.4.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "spdx-license-list": "^6.11.0"
+    "spdx-license-list": "^6.11.0",
+    "yaml": "^2.8.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -27,7 +27,6 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
-    "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
