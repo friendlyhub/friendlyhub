@@ -14,7 +14,7 @@
   "dependencies": {
     "js-yaml": "^4.1.1",
     "lucide-react": "^0.577.0",
-    "monaco-editor": "^0.52.2",
+    "monaco-editor": "~0.52.2",
     "monaco-yaml": "^5.4.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
