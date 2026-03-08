@@ -63,3 +63,7 @@ docker compose up  # PostgreSQL + flat-manager for local dev
 All repos live under the `friendlyhub` GitHub org:
 - `friendlyhub/friendlyhub` — this monorepo
 - `friendlyhub/<app-id>` — one repo per Flatpak app (e.g., `friendlyhub/org.example.MyApp`)
+
+## Anti-Slop measures
+
+Always read ANTISLOP.md in the project root whenver analysing code, proposing changes, making changes or creating documentation.

@@ -1,46 +1,15 @@
 import { useState, useCallback, useRef, useMemo } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { FileCode, FormInput, AlertTriangle } from 'lucide-react';
+import { FileCode, FileText, FormInput, AlertTriangle, Upload } from 'lucide-react';
 import YAML from 'yaml';
 import { getApp, submitApp } from '../api/client';
 import ManifestForm from '../components/ManifestForm';
 import ManifestEditor, { type EditorFormat } from '../components/ManifestEditor';
+import MetainfoForm from '../components/MetainfoForm';
+import MetainfoEditor from '../components/MetainfoEditor';
 import { createBlankManifest, getManifestAppId, normalizeManifest, validateRequired, type Manifest } from '../utils/manifest';
-
-function exampleMetainfo(appId: string, name: string): string {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<component type="desktop-application">
-  <id>${appId}</id>
-  <metadata_license>CC0-1.0</metadata_license>
-  <project_license>GPL-3.0-or-later</project_license>
-  <name>${name}</name>
-  <summary>A short summary of the app</summary>
-  <description>
-    <p>A longer description of what the app does.</p>
-  </description>
-  <developer id="com.example">
-    <name>Your Name</name>
-  </developer>
-  <screenshots>
-    <screenshot type="default">
-      <image>https://example.com/screenshot.png</image>
-      <caption>Main window</caption>
-    </screenshot>
-  </screenshots>
-  <url type="homepage">https://example.com</url>
-  <url type="bugtracker">https://github.com/example/app/issues</url>
-  <url type="vcs-browser">https://github.com/example/app</url>
-  <content_rating type="oars-1.1" />
-  <releases>
-    <release version="1.0.0" date="2026-01-01">
-      <description>
-        <p>Initial release.</p>
-      </description>
-    </release>
-  </releases>
-</component>`;
-}
+import { createBlankMetainfo, serializeMetainfo, parseMetainfo, validateMetainfo, getLatestVersion, getExternalSourceFiles, type MetainfoData } from '../utils/metainfo';
 
 function serializeManifest(m: Manifest, format: EditorFormat): string {
   if (format === 'json') {
@@ -51,8 +20,6 @@ function serializeManifest(m: Manifest, format: EditorFormat): string {
 
 // Replace deprecated app-id with id in-place (text-level to preserve formatting)
 function normalizeAppIdInText(text: string): string {
-  // YAML: `app-id:` at start of line
-  // JSON: `"app-id"`
   return text
     .replace(/^(\s*)app-id(\s*:)/m, '$1id$2')
     .replace(/"app-id"/g, '"id"');
@@ -71,25 +38,138 @@ function parseManifestText(text: string): Record<string, unknown> | null {
   return null;
 }
 
+// Drag handle component (shared between manifest and metainfo cards)
+function DragHandle({ cssVar }: { cssVar: string }) {
+  return (
+    <div
+      className="hidden lg:flex w-1.5 cursor-col-resize items-center justify-center bg-gray-100 border-x border-gray-200 hover:bg-emerald-100 active:bg-emerald-200 transition-colors select-none shrink-0"
+      onMouseDown={(e) => {
+        e.preventDefault();
+        const container = e.currentTarget.parentElement!;
+        const startX = e.clientX;
+        const containerRect = container.getBoundingClientRect();
+        const startPct = parseFloat(
+          getComputedStyle(container).getPropertyValue(cssVar) || '50'
+        );
+        const startWidth = (startPct / 100) * containerRect.width;
+
+        const onMouseMove = (ev: MouseEvent) => {
+          const delta = ev.clientX - startX;
+          const newWidth = startWidth + delta;
+          const pct = Math.min(80, Math.max(20, (newWidth / containerRect.width) * 100));
+          container.style.setProperty(cssVar, `${pct}%`);
+        };
+        const onMouseUp = () => {
+          document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('mouseup', onMouseUp);
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+        };
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      }}
+    >
+      <div className="w-0.5 h-6 rounded-full bg-gray-300" />
+    </div>
+  );
+}
+
+function SourceFileDropzone({
+  filename,
+  loaded,
+  onLoad,
+  onRemove,
+}: {
+  filename: string;
+  loaded: boolean;
+  onLoad: (content: string) => void;
+  onRemove: () => void;
+}) {
+  const [dragOver, setDragOver] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = (file: File) => {
+    if (file.name !== filename) {
+      alert(`Filename must be "${filename}", got "${file.name}"`);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => onLoad(reader.result as string);
+    reader.readAsText(file);
+  };
+
+  if (loaded) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+        <span className="text-sm font-mono text-emerald-700 flex-1">{filename}</span>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="text-xs text-red-500 hover:text-red-700"
+        >
+          Remove
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`flex flex-col items-center gap-1 px-4 py-4 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
+        dragOver ? 'border-emerald-400 bg-emerald-50' : 'border-gray-300 hover:border-gray-400'
+      }`}
+      onClick={() => inputRef.current?.click()}
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const file = e.dataTransfer.files[0];
+        if (file) handleFile(file);
+      }}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFile(file);
+          e.target.value = '';
+        }}
+      />
+      <Upload className="w-5 h-5 text-gray-400" />
+      <span className="text-sm font-mono text-gray-700">{filename}</span>
+      <span className="text-xs text-red-500">required</span>
+    </div>
+  );
+}
+
 export default function SubmitVersion() {
   const { appId } = useParams<{ appId: string }>();
   const navigate = useNavigate();
 
-  // Manifest state
+  // === Manifest state ===
   const [manifest, setManifest] = useState<Manifest>(() => createBlankManifest(appId || ''));
   const [editorText, setEditorText] = useState<string>(() =>
     serializeManifest(createBlankManifest(appId || ''), 'yaml')
   );
   const [editorFormat, setEditorFormat] = useState<EditorFormat>('yaml');
   const [parseError, setParseError] = useState<string | null>(null);
-
-  // Track which side is driving updates to prevent loops
   const updateSourceRef = useRef<'form' | 'editor' | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Submission fields (kept for now)
-  const [version, setVersion] = useState('');
-  const [metainfoText, setMetainfoText] = useState('');
+  // === Metainfo state ===
+  const [metainfo, setMetainfo] = useState<MetainfoData>(() => createBlankMetainfo(appId || ''));
+  const [metainfoText, setMetainfoText] = useState<string>(() =>
+    serializeMetainfo(createBlankMetainfo(appId || ''))
+  );
+  const [metainfoParseError, setMetainfoParseError] = useState<string | null>(null);
+  const metainfoDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // === Submission fields ===
   const [sourceFiles, setSourceFiles] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -102,7 +182,7 @@ export default function SubmitVersion() {
     enabled: !!appId,
   });
 
-  // Form -> Editor sync
+  // === Manifest sync ===
   const handleFormChange = useCallback((newManifest: Manifest) => {
     updateSourceRef.current = 'form';
     setManifest(newManifest);
@@ -110,12 +190,9 @@ export default function SubmitVersion() {
     setParseError(null);
   }, [editorFormat]);
 
-  // Editor -> Form sync (debounced)
   const handleEditorChange = useCallback((text: string, _format: EditorFormat) => {
     setEditorText(text);
-
     if (debounceRef.current) clearTimeout(debounceRef.current);
-
     debounceRef.current = setTimeout(() => {
       updateSourceRef.current = 'editor';
       const normalized = normalizeAppIdInText(text);
@@ -132,12 +209,10 @@ export default function SubmitVersion() {
     }, 400);
   }, []);
 
-  // Format change (JSON <-> YAML)
   const handleFormatChange = useCallback((newFormat: EditorFormat) => {
     setEditorFormat(newFormat);
   }, []);
 
-  // File load
   const handleLoadFile = useCallback((text: string, detectedFormat: EditorFormat) => {
     const normalized = normalizeAppIdInText(text);
     setEditorFormat(detectedFormat);
@@ -151,12 +226,55 @@ export default function SubmitVersion() {
     }
   }, []);
 
-  // Validation
+  // === Metainfo sync ===
+  const handleMetainfoFormChange = useCallback((newData: MetainfoData) => {
+    setMetainfo(newData);
+    setMetainfoText(serializeMetainfo(newData));
+    setMetainfoParseError(null);
+  }, []);
+
+  const handleMetainfoEditorChange = useCallback((text: string) => {
+    setMetainfoText(text);
+    if (metainfoDebounceRef.current) clearTimeout(metainfoDebounceRef.current);
+    metainfoDebounceRef.current = setTimeout(() => {
+      const parsed = parseMetainfo(text);
+      if (parsed) {
+        setMetainfo(parsed);
+        setMetainfoParseError(null);
+      } else if (text.trim()) {
+        setMetainfoParseError('Invalid XML. Must be valid AppStream metainfo.');
+      }
+    }, 400);
+  }, []);
+
+  const handleMetainfoLoadFile = useCallback((text: string) => {
+    setMetainfoText(text);
+    const parsed = parseMetainfo(text);
+    if (parsed) {
+      setMetainfo(parsed);
+      setMetainfoParseError(null);
+    } else {
+      setMetainfoParseError('Could not parse the uploaded file.');
+    }
+  }, []);
+
+  // === Validation ===
   const missingFields = useMemo(() => validateRequired(manifest), [manifest]);
   const manifestAppId = getManifestAppId(manifest);
   const appIdMismatch = manifestAppId !== '' && manifestAppId !== appId;
 
-  // Submission
+  const metainfoErrors = useMemo(
+    () => validateMetainfo(metainfo, appId || '').filter(m => m.severity === 'error'),
+    [metainfo, appId]
+  );
+  const metainfoIdMismatch = metainfo.id.trim() !== '' && metainfo.id !== appId;
+
+  // === External source files from manifest ===
+  const externalSourceFiles = useMemo(() => getExternalSourceFiles(manifest), [manifest]);
+
+  // === Submission ===
+  const version = getLatestVersion(metainfo);
+
   const mutation = useMutation({
     mutationFn: () => {
       setSubmitError(null);
@@ -170,7 +288,19 @@ export default function SubmitVersion() {
     },
   });
 
-  const canSubmit = missingFields.length === 0 && !appIdMismatch && !parseError && version.trim() && metainfoText.trim();
+  // Check all external source files are uploaded
+  const missingSourceFiles = externalSourceFiles.filter(f => !sourceFiles[f]);
+
+  const canSubmit =
+    missingFields.length === 0 &&
+    !appIdMismatch &&
+    !parseError &&
+    metainfoErrors.length === 0 &&
+    !metainfoIdMismatch &&
+    !metainfoParseError &&
+    version.trim() !== '' &&
+    missingSourceFiles.length === 0 &&
+    metainfoText.trim();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -222,7 +352,7 @@ export default function SubmitVersion() {
                 mobileView === 'editor' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
               }`}
             >
-              <FileCode className="w-3.5 h-3.5" /> Manifest
+              <FileCode className="w-3.5 h-3.5" /> Code
             </button>
           </div>
         </div>
@@ -250,175 +380,99 @@ export default function SubmitVersion() {
             />
           </div>
 
-          {/* Drag handle */}
-          <div
-            className="hidden lg:flex w-1.5 cursor-col-resize items-center justify-center bg-gray-100 border-x border-gray-200 hover:bg-emerald-100 active:bg-emerald-200 transition-colors select-none shrink-0"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              const container = e.currentTarget.parentElement!;
-              const startX = e.clientX;
-              const containerRect = container.getBoundingClientRect();
-              const startPct = parseFloat(
-                getComputedStyle(container).getPropertyValue('--form-width') || '50'
-              );
-              const startWidth = (startPct / 100) * containerRect.width;
+          <DragHandle cssVar="--form-width" />
 
-              const onMouseMove = (ev: MouseEvent) => {
-                const delta = ev.clientX - startX;
-                const newWidth = startWidth + delta;
-                const pct = Math.min(80, Math.max(20, (newWidth / containerRect.width) * 100));
-                container.style.setProperty('--form-width', `${pct}%`);
-              };
-              const onMouseUp = () => {
-                document.removeEventListener('mousemove', onMouseMove);
-                document.removeEventListener('mouseup', onMouseUp);
-                document.body.style.cursor = '';
-                document.body.style.userSelect = '';
-              };
-              document.body.style.cursor = 'col-resize';
-              document.body.style.userSelect = 'none';
-              document.addEventListener('mousemove', onMouseMove);
-              document.addEventListener('mouseup', onMouseUp);
-            }}
-          >
-            <div className="w-0.5 h-6 rounded-full bg-gray-300" />
-          </div>
-
-          {/* Editor pane (right) - sticky so it stays visible while form scrolls */}
+          {/* Editor pane (right) */}
           <div
-            className={`lg:block ${mobileView === 'editor' ? 'w-full' : 'hidden'} lg:sticky lg:top-0 h-[calc(100vh-8rem)] lg:self-start flex-1 min-w-0`}
+            className={`lg:block ${mobileView === 'editor' ? 'w-full' : 'hidden'} flex-1 min-w-0`}
           >
-            <ManifestEditor
-              value={editorText}
-              format={editorFormat}
-              onChange={handleEditorChange}
-              onFormatChange={handleFormatChange}
-              parseError={parseError}
-              onLoadFile={handleLoadFile}
-            />
+            <div className="lg:sticky lg:top-0 h-[calc(100vh-8rem)]">
+              <ManifestEditor
+                value={editorText}
+                format={editorFormat}
+                onChange={handleEditorChange}
+                onFormatChange={handleFormatChange}
+                parseError={parseError}
+                onLoadFile={handleLoadFile}
+              />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Submission area */}
-      <div className="bg-white border-t border-gray-200 px-4 sm:px-6 py-4">
-        <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-4">
-          {/* Validation status */}
-          {missingFields.length > 0 && (
-            <div className="text-xs text-amber-600">
-              Missing required fields: {missingFields.join(', ')}
-            </div>
-          )}
+      {/* Metainfo card */}
+      <div className="mx-4 sm:mx-6 mt-4 border border-gray-200 rounded-lg overflow-hidden">
+        <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
+          <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+            <FileText className="w-4 h-4" />
+            AppStream Metainfo
+          </h2>
+        </div>
 
-          {/* Version + Metainfo (kept for submission) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Version <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={version}
-                onChange={(e) => setVersion(e.target.value)}
-                placeholder="1.0.0"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Companion Source Files{' '}
-                <span className="text-gray-400 font-normal">(optional)</span>
-              </label>
-              <input
-                type="file"
-                multiple
-                accept=".json"
-                onChange={(e) => {
-                  const files = e.target.files;
-                  if (!files) return;
-                  Array.from(files).forEach((file) => {
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      setSourceFiles((prev) => ({
-                        ...prev,
-                        [file.name]: reader.result as string,
-                      }));
-                    };
-                    reader.readAsText(file);
-                  });
-                }}
-                className="block w-full text-sm text-gray-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
-              />
-              {Object.keys(sourceFiles).length > 0 && (
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {Object.keys(sourceFiles).map((name) => (
-                    <span
-                      key={name}
-                      className="inline-flex items-center gap-1 bg-gray-100 rounded px-2 py-0.5 text-xs font-mono"
-                    >
-                      {name}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSourceFiles((prev) => {
-                            const next = { ...prev };
-                            delete next[name];
-                            return next;
-                          })
-                        }
-                        className="text-red-400 hover:text-red-600"
-                      >
-                        &times;
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Metainfo */}
-          <div>
-            <div className="flex justify-between items-center mb-1">
-              <label className="block text-sm font-medium text-gray-700">
-                AppStream Metainfo (XML) <span className="text-red-500">*</span>
-              </label>
-              <div className="flex gap-2">
-                <label className="text-xs text-emerald-600 hover:text-emerald-700 cursor-pointer">
-                  Upload
-                  <input
-                    type="file"
-                    accept=".xml,.metainfo.xml"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = () => setMetainfoText(reader.result as string);
-                      reader.readAsText(file);
-                    }}
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setMetainfoText(exampleMetainfo(app.app_id, app.name))}
-                  className="text-xs text-emerald-600 hover:text-emerald-700"
-                >
-                  Example
-                </button>
-              </div>
-            </div>
-            <textarea
-              required
-              value={metainfoText}
-              onChange={(e) => setMetainfoText(e.target.value)}
-              rows={6}
-              placeholder={`Paste AppStream metainfo XML (${app.app_id}.metainfo.xml)...`}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono leading-relaxed"
+        <div className="flex relative">
+          {/* Form pane (left) */}
+          <div
+            className={`lg:block ${mobileView === 'form' ? 'w-full' : 'hidden'} bg-white overflow-y-auto`}
+            style={{ width: 'var(--metainfo-width, 50%)' }}
+          >
+            <MetainfoForm
+              data={metainfo}
+              onChange={handleMetainfoFormChange}
+              lockedAppId={appId || ''}
             />
           </div>
 
+          <DragHandle cssVar="--metainfo-width" />
+
+          {/* Editor pane (right) */}
+          <div
+            className={`lg:block ${mobileView === 'editor' ? 'w-full' : 'hidden'} flex-1 min-w-0`}
+          >
+            <div className="lg:sticky lg:top-0 h-[calc(100vh-8rem)]">
+              <MetainfoEditor
+                value={metainfoText}
+                onChange={handleMetainfoEditorChange}
+                parseError={metainfoParseError}
+                onLoadFile={handleMetainfoLoadFile}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* External source files */}
+      {externalSourceFiles.length > 0 && (
+        <div className="mx-4 sm:mx-6 mt-4 border border-gray-200 rounded-lg overflow-hidden">
+          <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
+            <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+              <Upload className="w-4 h-4" />
+              Source Files
+              <span className="text-xs font-normal text-gray-400 ml-1">
+                referenced in manifest
+              </span>
+            </h2>
+          </div>
+          <div className="p-4 space-y-3">
+            {externalSourceFiles.map((filename) => (
+              <SourceFileDropzone
+                key={filename}
+                filename={filename}
+                loaded={!!sourceFiles[filename]}
+                onLoad={(content) => setSourceFiles((prev) => ({ ...prev, [filename]: content }))}
+                onRemove={() => setSourceFiles((prev) => {
+                  const next = { ...prev };
+                  delete next[filename];
+                  return next;
+                })}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Submission area */}
+      <div className="bg-white border-t border-gray-200 px-4 sm:px-6 py-4 mt-4">
+        <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-4">
           {/* Errors */}
           {(submitError || mutation.isError) && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
@@ -430,10 +484,10 @@ export default function SubmitVersion() {
           <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700">
             <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
             <p>
-              The manifest editor and validator are in beta and provided on a best-effort basis.
-              Your submission passing validation here does not necessarily mean it will pass
-              flatpak-builder validation. You will have the opportunity to make changes if
-              the submission fails.
+              The Flatpak manifest &amp; AppStream metainfo editor and validator are in beta
+              and provided on a best-effort basis. Your submission may still fail when validated
+              during build with flatpak-builder and appstreamcli. You can make changes later
+              if this submission fails.
             </p>
           </div>
 
@@ -443,7 +497,7 @@ export default function SubmitVersion() {
             disabled={mutation.isPending || !canSubmit}
             className="w-full bg-emerald-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
           >
-            {mutation.isPending ? 'Submitting...' : 'Submit Build'}
+            {mutation.isPending ? 'Submitting...' : version ? `Submit v${version}` : 'Submit Build'}
           </button>
         </form>
       </div>

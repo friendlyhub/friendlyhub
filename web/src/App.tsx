@@ -8,11 +8,9 @@ import Browse from './pages/Browse';
 import AppDetail from './pages/AppDetail';
 import MyApps from './pages/MyApps';
 import NewApp from './pages/NewApp';
-import Submissions from './pages/Submissions';
 import SubmitVersion from './pages/SubmitVersion';
 import SubmissionDetail from './pages/SubmissionDetail';
 import ReviewQueue from './pages/ReviewQueue';
-import ReviewDetail from './pages/ReviewDetail';
 import InstallApp from './pages/InstallApp';
 import VerifyApp from './pages/VerifyApp';
 import AuthCallback from './pages/AuthCallback';
@@ -90,11 +88,7 @@ function AppRoutes() {
         />
         <Route
           path="/my/submissions"
-          element={
-            <ProtectedRoute>
-              <Submissions />
-            </ProtectedRoute>
-          }
+          element={<Navigate to="/my/apps" replace />}
         />
         <Route
           path="/my/submissions/:id"
@@ -116,7 +110,7 @@ function AppRoutes() {
           path="/review/:id"
           element={
             <ReviewerRoute>
-              <ReviewDetail />
+              <SubmissionDetail reviewMode />
             </ReviewerRoute>
           }
         />

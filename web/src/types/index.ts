@@ -97,6 +97,21 @@ export interface Review {
   decision: string;
   comment: string;
   created_at: string;
+  reviewer_name?: string;
+  reviewer_avatar_url?: string | null;
+}
+
+export interface MyAppInfo extends App {
+  latest_submission_id?: string;
+  latest_submission_version?: string;
+  latest_submission_status?: string;
+}
+
+export interface SubmissionDetail {
+  submission: Submission;
+  reviews: Review[];
+  checks: CheckResult[];
+  app: ReviewAppInfo | null;
 }
 
 export interface ReviewAppInfo {

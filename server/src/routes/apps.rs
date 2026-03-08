@@ -231,10 +231,23 @@ async fn apps_by_owner(
 async fn my_apps(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<Vec<AppResponse>>, AppError> {
+) -> Result<Json<serde_json::Value>, AppError> {
     let apps = app::list_by_owner(&state.db, auth.user_id).await?;
-    let responses: Vec<AppResponse> = apps.into_iter().map(AppResponse::from).collect();
-    Ok(Json(responses))
+    let mut results = Vec::new();
+    for a in apps {
+        let app_uuid = a.id;
+        let mut val = serde_json::to_value(AppResponse::from(a))
+            .map_err(|e| AppError::Internal(format!("Serialization failed: {e}")))?;
+        // Enrich with latest submission info
+        let subs = submission::list_by_app(&state.db, app_uuid).await?;
+        if let Some(latest) = subs.first() {
+            val["latest_submission_id"] = serde_json::json!(latest.id);
+            val["latest_submission_version"] = serde_json::json!(latest.version);
+            val["latest_submission_status"] = serde_json::json!(latest.status);
+        }
+        results.push(val);
+    }
+    Ok(Json(serde_json::Value::Array(results)))
 }
 
 async fn unpublish_app(

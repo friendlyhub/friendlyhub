@@ -9,28 +9,14 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-function relativeLabel(date: Date, now: Date): string {
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) return 'today';
-  if (diffDays === 1) return 'yesterday';
-  if (diffDays < 7) return `${diffDays} days ago`;
-  if (diffDays < 14) return 'a week ago';
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-  if (diffDays < 60) return 'a month ago';
-  if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-  if (diffDays < 730) return 'a year ago';
-  return `${Math.floor(diffDays / 365)} years ago`;
+function pad(n: number): string {
+  return String(n).padStart(2, '0');
 }
 
 /**
- * Format a date string as "6th March 2026 (today)" / "2nd March 2026 (4 days ago)"
+ * Format a date string as "8th March 2026 17:01:21"
  */
 export function formatDate(isoString: string): string {
-  const date = new Date(isoString);
-  const now = new Date();
-  const formatted = `${ordinal(date.getDate())} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
-  const relative = relativeLabel(date, now);
-  return `${formatted} (${relative})`;
+  const d = new Date(isoString);
+  return `${ordinal(d.getDate())} ${MONTHS[d.getMonth()]} ${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }

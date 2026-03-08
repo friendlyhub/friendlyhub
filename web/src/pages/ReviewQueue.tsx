@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { getReviewQueue } from '../api/client';
+import { formatDate } from '../utils/dates';
 import StatusBadge from '../components/StatusBadge';
 
 export default function ReviewQueue() {
@@ -33,7 +34,7 @@ export default function ReviewQueue() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-gray-500">
-                    {new Date(sub.created_at).toLocaleDateString()}
+                    {formatDate(sub.created_at)}
                   </span>
                   <StatusBadge status={sub.status} />
                 </div>

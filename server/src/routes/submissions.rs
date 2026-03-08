@@ -10,9 +10,9 @@ use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
 use crate::errors::AppError;
-use crate::models::{app, submission};
+use crate::models::{app, review, submission, user};
 use crate::router::AppState;
-use crate::services::{manifest, metainfo};
+use crate::services::{checks, manifest, metainfo};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -20,6 +20,7 @@ pub fn routes() -> Router<AppState> {
         .route("/submissions", get(my_submissions))
         .route("/submissions/{id}", get(get_submission))
         .route("/submissions/{id}/validate", get(validate_submission))
+        .route("/submissions/{id}/source-files", get(source_files))
 }
 
 #[derive(Deserialize)]
@@ -88,6 +89,17 @@ async fn submit(
         }
     }
 
+    // Update app metadata from metainfo immediately so the app detail page
+    // shows the correct info even before the submission is reviewed.
+    let finish_args: Vec<String> = input.manifest
+        .get("finish-args")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+    if let Err(e) = app::update_from_metainfo(&state.db, app.id, &metainfo_validation.data, finish_args).await {
+        tracing::warn!(app_id = %app.app_id, error = %e, "Failed to update app from metainfo on submit");
+    }
+
     // Create the submission
     let sub = submission::create(
         &state.db,
@@ -113,16 +125,29 @@ async fn submit(
 async fn my_submissions(
     State(state): State<AppState>,
     auth: AuthUser,
-) -> Result<Json<Vec<submission::Submission>>, AppError> {
+) -> Result<Json<Value>, AppError> {
     let subs = submission::list_by_submitter(&state.db, auth.user_id).await?;
-    Ok(Json(subs))
+
+    // Enrich each submission with the string app_id
+    let mut results = Vec::new();
+    for sub in &subs {
+        let mut val = serde_json::to_value(sub)
+            .map_err(|e| AppError::Internal(format!("Serialization failed: {e}")))?;
+        if let Some(found_app) = app::find_by_id(&state.db, sub.app_id).await? {
+            val["app_name"] = serde_json::json!(found_app.name);
+            val["string_app_id"] = serde_json::json!(found_app.app_id);
+        }
+        results.push(val);
+    }
+
+    Ok(Json(Value::Array(results)))
 }
 
 async fn get_submission(
     State(state): State<AppState>,
     auth: AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<submission::Submission>, AppError> {
+) -> Result<Json<Value>, AppError> {
     let sub = submission::find_by_id(&state.db, id)
         .await?
         .ok_or_else(|| AppError::NotFound("Submission not found".into()))?;
@@ -135,7 +160,82 @@ async fn get_submission(
         return Err(AppError::Forbidden);
     }
 
-    Ok(Json(sub))
+    // Fetch reviews with reviewer names
+    let reviews = review::list_by_submission(&state.db, id).await?;
+    let mut enriched_reviews = Vec::new();
+    for rev in &reviews {
+        let mut val = serde_json::to_value(rev)
+            .map_err(|e| AppError::Internal(format!("Serialization failed: {e}")))?;
+        if let Some(reviewer) = user::find_by_id(&state.db, rev.reviewer_id).await? {
+            val["reviewer_name"] = serde_json::json!(reviewer.display_name);
+            val["reviewer_avatar_url"] = serde_json::json!(reviewer.avatar_url);
+        }
+        enriched_reviews.push(val);
+    }
+
+    // Fetch checks
+    let check_results = checks::get_results(&state.db, id).await?;
+
+    // Fetch app info
+    let found_app = app::find_by_id(&state.db, sub.app_id).await?;
+    let app_info = found_app.map(|a| serde_json::json!({
+        "app_id": a.app_id,
+        "name": a.name,
+    }));
+
+    Ok(Json(serde_json::json!({
+        "submission": sub,
+        "reviews": enriched_reviews,
+        "checks": check_results,
+        "app": app_info,
+    })))
+}
+
+/// List source files in the app's GitHub repo for a submission.
+async fn source_files(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Value>, AppError> {
+    let sub = submission::find_by_id(&state.db, id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Submission not found".into()))?;
+
+    // Only the submitter, reviewer, or admin can see source files
+    if sub.submitter_id != auth.user_id
+        && auth.role != "reviewer"
+        && auth.role != "admin"
+    {
+        return Err(AppError::Forbidden);
+    }
+
+    let found_app = app::find_by_id(&state.db, sub.app_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("App not found".into()))?;
+
+    let app_id = &found_app.app_id;
+    let all_files = state.github.list_repo_files(app_id).await?;
+
+    let manifest_json = format!("{app_id}.json");
+    let manifest_yaml = format!("{app_id}.yaml");
+    let manifest_yml = format!("{app_id}.yml");
+    let metainfo_xml = format!("{app_id}.metainfo.xml");
+
+    let filtered: Vec<_> = all_files
+        .into_iter()
+        .filter(|f| {
+            let n = &f.name;
+            n != "README.md"
+                && n != ".gitignore"
+                && n != &manifest_json
+                && n != &manifest_yaml
+                && n != &manifest_yml
+                && n != &metainfo_xml
+                && !n.starts_with('.')
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!(filtered)))
 }
 
 /// Push the manifest to the app's GitHub repo and trigger a GHA build.

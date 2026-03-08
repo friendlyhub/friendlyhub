@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Package, FileText, ClipboardCheck, Menu, X } from 'lucide-react';
+import { Package, ClipboardCheck, Menu, X } from 'lucide-react';
 import { useAuthStore } from '../stores/auth';
 
 export default function Layout() {
@@ -17,8 +17,7 @@ export default function Layout() {
   const isDashboardRoute = location.pathname.startsWith('/my/') || location.pathname.startsWith('/review');
 
   const sidebarLinks = [
-    { to: '/my/apps', label: 'My Apps', icon: Package },
-    { to: '/my/submissions', label: 'Submissions', icon: FileText },
+    { to: '/my/apps', label: 'Apps', icon: Package },
     ...((user?.role === 'reviewer' || user?.role === 'admin')
       ? [{ to: '/review', label: 'Review Queue', icon: ClipboardCheck }]
       : []),

@@ -18,6 +18,7 @@ pub fn routes() -> Router<AppState> {
         .route("/review/queue", get(review_queue))
         .route("/review/queue/{id}", get(review_detail))
         .route("/review/queue/{id}/checks", get(submission_checks))
+        .route("/review/queue/{id}/source-files", get(source_files))
         .route("/review/queue/{id}/decision", post(review_decision))
 }
 
@@ -71,6 +72,47 @@ async fn submission_checks(
 
     let results = checks::get_results(&state.db, id).await?;
     Ok(Json(results))
+}
+
+/// List source files in the app's GitHub repo (excluding infrastructure files).
+async fn source_files(
+    State(state): State<AppState>,
+    _reviewer: ReviewerUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Value>, AppError> {
+    let sub = submission::find_by_id(&state.db, id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Submission not found".into()))?;
+
+    let found_app = app::find_by_id(&state.db, sub.app_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("App not found".into()))?;
+
+    let app_id = &found_app.app_id;
+    let all_files = state.github.list_repo_files(app_id).await?;
+
+    // Filter out infrastructure files -- keep only source/data files that
+    // a reviewer would want to inspect.
+    let manifest_json = format!("{app_id}.json");
+    let manifest_yaml = format!("{app_id}.yaml");
+    let manifest_yml = format!("{app_id}.yml");
+    let metainfo_xml = format!("{app_id}.metainfo.xml");
+
+    let filtered: Vec<_> = all_files
+        .into_iter()
+        .filter(|f| {
+            let n = &f.name;
+            n != "README.md"
+                && n != ".gitignore"
+                && n != &manifest_json
+                && n != &manifest_yaml
+                && n != &manifest_yml
+                && n != &metainfo_xml
+                && !n.starts_with('.')
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!(filtered)))
 }
 
 #[derive(Debug, Deserialize)]

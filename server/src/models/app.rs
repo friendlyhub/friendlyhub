@@ -470,7 +470,9 @@ pub async fn update_from_metainfo(
         app.description = desc.clone();
     }
     app.developer_name = data.developer_name.clone();
-    app.icon_url = data.icon_url.clone();
+    if data.icon_url.is_some() {
+        app.icon_url = data.icon_url.clone();
+    }
     app.screenshots = data.screenshots.clone();
     app.releases = data.releases.clone();
     app.branding = data.branding.clone();

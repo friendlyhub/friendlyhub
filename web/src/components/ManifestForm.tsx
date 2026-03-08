@@ -1,21 +1,75 @@
 import { useState, useCallback } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronRight, Search, Shield, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, Search, Shield, ShieldAlert, ShieldCheck, AlertCircle, AlertTriangle, Info } from 'lucide-react';
 import {
   REQUIRED_FIELDS,
   OPTIONAL_FIELDS,
   OPTIONAL_FIELD_KEYS,
   MODULE_FIELDS,
   SOURCE_TYPES,
+  validateRequired,
   type Manifest,
   type ManifestModule,
   type FieldDef,
 } from '../utils/manifest';
 import { classifyPermission, getOverallSeverity, SEVERITY_CONFIG } from '../utils/permissions';
 
+interface ValidationMessage {
+  severity: 'error' | 'warning' | 'info';
+  field: string;
+  message: string;
+}
+
 interface ManifestFormProps {
   manifest: Manifest;
   onChange: (manifest: Manifest) => void;
   lockedAppId: string;
+}
+
+// Expandable validation panel grouped by severity
+function ValidationPanel({ messages }: { messages: ValidationMessage[] }) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  if (messages.length === 0) return null;
+
+  const errors = messages.filter(m => m.severity === 'error');
+  const warnings = messages.filter(m => m.severity === 'warning');
+  const infos = messages.filter(m => m.severity === 'info');
+
+  const groups: { severity: 'error' | 'warning' | 'info'; items: ValidationMessage[]; label: string; Icon: typeof AlertCircle; color: string; bg: string }[] = [];
+  if (errors.length > 0) groups.push({ severity: 'error', items: errors, label: `${errors.length} error${errors.length > 1 ? 's' : ''}`, Icon: AlertCircle, color: 'text-red-600', bg: 'bg-red-50 border-red-200' });
+  if (warnings.length > 0) groups.push({ severity: 'warning', items: warnings, label: `${warnings.length} warning${warnings.length > 1 ? 's' : ''}`, Icon: AlertTriangle, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200' });
+  if (infos.length > 0) groups.push({ severity: 'info', items: infos, label: `${infos.length} suggestion${infos.length > 1 ? 's' : ''}`, Icon: Info, color: 'text-blue-500', bg: 'bg-blue-50 border-blue-200' });
+
+  return (
+    <div className="space-y-2">
+      {groups.map(({ severity, items, label, Icon, color, bg }) => {
+        const isOpen = expanded[severity] ?? (severity === 'error');
+        return (
+          <div key={severity} className={`border rounded-lg ${bg}`}>
+            <button
+              type="button"
+              onClick={() => setExpanded(prev => ({ ...prev, [severity]: !isOpen }))}
+              className={`flex items-center gap-1.5 w-full px-3 py-1.5 text-xs font-medium ${color}`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {label}
+              {isOpen ? <ChevronDown className="w-3 h-3 ml-auto" /> : <ChevronRight className="w-3 h-3 ml-auto" />}
+            </button>
+            {isOpen && (
+              <div className="px-3 pb-2 space-y-0.5">
+                {items.map((m, i) => (
+                  <div key={i} className={`text-xs ${color} pl-5`}>
+                    <span className="text-gray-400 mr-1">[{m.field}]</span>
+                    {m.message}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 // Generic field renderer
@@ -462,6 +516,16 @@ export default function ManifestForm({ manifest, onChange, lockedAppId }: Manife
   const effectiveId = manifest.id || manifest['app-id'] || '';
   const appIdMismatch = effectiveId !== '' && effectiveId !== lockedAppId;
 
+  // Build validation messages
+  const missingFields = validateRequired(manifest);
+  const validationMessages: ValidationMessage[] = [];
+  if (appIdMismatch) {
+    validationMessages.push({ severity: 'error', field: 'ID', message: `App ID must be ${lockedAppId}` });
+  }
+  for (const label of missingFields) {
+    validationMessages.push({ severity: 'error', field: 'Required', message: `${label} is required` });
+  }
+
   // Determine which optional fields are currently active in the manifest
   const activeOptionalKeys = new Set<string>();
   for (const key of Object.keys(manifest)) {
@@ -494,12 +558,9 @@ export default function ManifestForm({ manifest, onChange, lockedAppId }: Manife
 
   return (
     <div className="space-y-4 p-4">
-      {/* App ID error */}
-      {appIdMismatch && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
-          App ID must be <span className="font-mono font-semibold">{lockedAppId}</span>.
-          You cannot submit a manifest for a different app.
-        </div>
+      {/* Validation alerts */}
+      {validationMessages.length > 0 && (
+        <ValidationPanel messages={validationMessages} />
       )}
 
       {/* Required fields */}

@@ -11,6 +11,7 @@ import {
   Monitor, Server, Mouse, Usb, MemoryStick, Wifi, ArrowLeftRight, AppWindow,
   Volume2, Printer, Key, Radio, Bluetooth, Share2, Plug, Cpu, FolderOpen,
   Database, ToggleRight, Settings, FileText, ShieldQuestion,
+  Upload, Trash2, EyeOff, Info,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { classifyPermission, getOverallSeverity, sortBySeverity, getPermissionIcon, SEVERITY_CONFIG } from '../utils/permissions';
@@ -248,6 +249,46 @@ export default function AppDetail() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Owner management panel */}
+      {isOwner && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-2 text-sm text-blue-700">
+              <Info size={16} />
+              <span className="font-medium">You own this app.</span>
+              {!app.is_published && (
+                <span className="text-blue-600">This page is a preview and is not publicly visible.</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Link
+                to={`/my/apps/${app.app_id}/submit`}
+                className="inline-flex items-center gap-1.5 bg-emerald-600 text-white px-3.5 py-1.5 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors"
+              >
+                <Upload size={14} />
+                Submit Version
+              </Link>
+              {app.is_published && (
+                <button
+                  onClick={() => setShowUnpublish(true)}
+                  className="inline-flex items-center gap-1.5 bg-yellow-500 text-white px-3.5 py-1.5 rounded-lg text-sm font-medium hover:bg-yellow-600 transition-colors"
+                >
+                  <EyeOff size={14} />
+                  Unpublish
+                </button>
+              )}
+              <button
+                onClick={() => { setShowDelete(true); setDeleteConfirmText(''); }}
+                className="inline-flex items-center gap-1.5 bg-red-600 text-white px-3.5 py-1.5 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
+              >
+                <Trash2 size={14} />
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start gap-6 mb-8">
         {app.icon_url ? (
@@ -270,30 +311,6 @@ export default function AppDetail() {
                 <Download size={16} />
                 Install
               </Link>
-              {isOwner && (
-                <>
-                  <Link
-                    to={`/my/apps/${app.app_id}/submit`}
-                    className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700"
-                  >
-                    Submit Version
-                  </Link>
-                  {app.is_published && (
-                    <button
-                      onClick={() => setShowUnpublish(true)}
-                      className="bg-yellow-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-yellow-600"
-                    >
-                      Unpublish
-                    </button>
-                  )}
-                  <button
-                    onClick={() => { setShowDelete(true); setDeleteConfirmText(''); }}
-                    className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700"
-                  >
-                    Delete
-                  </button>
-                </>
-              )}
             </div>
           </div>
           {app.developer_name && (

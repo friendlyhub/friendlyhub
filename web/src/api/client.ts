@@ -1,4 +1,4 @@
-import type { App, CheckResult, CreateAppResponse, ReviewDetail, Submission, User } from '../types';
+import type { App, CheckResult, CreateAppResponse, MyAppInfo, ReviewDetail, Submission, SubmissionDetail, User } from '../types';
 
 const API_BASE = '/api/v1';
 
@@ -41,7 +41,7 @@ export const getAppsByOwner = (ownerId: string) =>
   request<App[]>(`/apps/by-owner/${ownerId}`);
 
 // Apps (authenticated)
-export const getMyApps = () => request<App[]>('/apps/mine');
+export const getMyApps = () => request<MyAppInfo[]>('/apps/mine');
 
 export const createApp = (data: {
   app_id: string;
@@ -112,18 +112,27 @@ export const submitApp = (
     },
   );
 
-export const getMySubmissions = () => request<Submission[]>('/submissions');
-
-export const getSubmission = (id: string) => request<Submission>(`/submissions/${id}`);
+export const getSubmission = (id: string) => request<SubmissionDetail>(`/submissions/${id}`);
 
 export const getSubmissionChecks = (id: string) =>
   request<CheckResult[]>(`/submissions/${id}/validate`);
+
+export const getSubmissionSourceFiles = (id: string) =>
+  request<SourceFileInfo[]>(`/submissions/${id}/source-files`);
 
 // Review (reviewer only)
 export const getReviewQueue = () => request<Submission[]>('/review/queue');
 
 export const getReviewDetail = (id: string) =>
   request<ReviewDetail>(`/review/queue/${id}`);
+
+export interface SourceFileInfo {
+  name: string;
+  download_url: string;
+}
+
+export const getReviewSourceFiles = (id: string) =>
+  request<SourceFileInfo[]>(`/review/queue/${id}/source-files`);
 
 export const submitReviewDecision = (id: string, decision: string, comment: string) =>
   request<{ review: unknown; submission_status: string }>(
