@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle, XCircle, Loader2, Circle, ExternalLink, Hammer } from 'lucide-react';
 import CollapsibleCard from './CollapsibleCard';
@@ -69,6 +70,14 @@ interface Props {
 }
 
 export default function BuildProgress({ appId, runId, runUrl, isBuilding }: Props) {
+  // Tick every second while building so formatDuration re-calculates with fresh Date.now()
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!isBuilding) return;
+    const id = setInterval(() => setTick((t) => t + 1), 1_000);
+    return () => clearInterval(id);
+  }, [isBuilding]);
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['ghaBuildProgress', appId, runId],
     queryFn: () => fetchGitHubJobs(appId, runId),
