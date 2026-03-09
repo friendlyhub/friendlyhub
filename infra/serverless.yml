@@ -413,6 +413,26 @@ resources:
                 StringEquals:
                   AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${OstreeRepoCDN}"
 
+    FlatpakrefContentTypeFunction:
+      Type: AWS::CloudFront::Function
+      Properties:
+        Name: friendlyhub-flatpakref-content-type-${self:provider.stage}
+        AutoPublish: true
+        FunctionCode: |
+          function handler(event) {
+            var response = event.response;
+            var uri = event.request.uri;
+            if (uri.endsWith('.flatpakref')) {
+              response.headers['content-type'] = { value: 'application/vnd.flatpak.ref' };
+            } else if (uri.endsWith('.flatpakrepo')) {
+              response.headers['content-type'] = { value: 'application/vnd.flatpak.repo' };
+            }
+            return response;
+          }
+        FunctionConfig:
+          Comment: Set correct Content-Type for Flatpak files
+          Runtime: cloudfront-js-2.0
+
     OstreeRepoCDN:
       Type: AWS::CloudFront::Distribution
       Properties:
@@ -436,6 +456,9 @@ resources:
             CachedMethods:
               - GET
               - HEAD
+            FunctionAssociations:
+              - EventType: viewer-response
+                FunctionARN: !GetAtt FlatpakrefContentTypeFunction.FunctionARN
           Origins:
             - Id: ostree-s3
               DomainName: !GetAtt OstreeRepoBucket.RegionalDomainName
