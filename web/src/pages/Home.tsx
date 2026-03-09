@@ -1,31 +1,102 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { listApps } from '../api/client';
 import AppCard from '../components/AppCard';
 
+const SLIDES = [
+  {
+    title: 'FriendlyHub is user-friendly',
+    body: 'Clear explanations of what permissions do, apps that request only the permissions they actually need, and one-click installs from your browser.',
+    gradient: 'from-emerald-600 to-teal-700',
+  },
+  {
+    title: 'FriendlyHub is developer-friendly',
+    body: 'Clear review criteria, fully automated builds, and no gatekeeping on non-safety concerns. Your app, your choices.',
+    gradient: 'from-blue-600 to-indigo-700',
+  },
+  {
+    title: 'FriendlyHub is community-friendly',
+    body: "Fully open-sourced front-end, back-end, and build service. Don't like FriendlyHub? Clone it and deploy your own.",
+    gradient: 'from-purple-600 to-fuchsia-700',
+  },
+  {
+    title: 'FriendlyHub is AI-friendly',
+    body: 'AI-assisted submissions are treated just like any other submission. We care about quality, not how you got there.',
+    gradient: 'from-amber-600 to-orange-700',
+  },
+];
+
+const INTERVAL = 7000;
+
 export default function Home() {
+  const [current, setCurrent] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startRef = useRef(Date.now());
+
+  const goTo = useCallback((index: number) => {
+    setCurrent(index);
+    setProgress(0);
+    startRef.current = Date.now();
+  }, []);
+
+  const next = useCallback(() => goTo((current + 1) % SLIDES.length), [current, goTo]);
+  const prev = useCallback(() => goTo((current - 1 + SLIDES.length) % SLIDES.length), [current, goTo]);
+
+  const touchStartX = useRef(0);
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  }, []);
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    const delta = e.changedTouches[0].clientX - touchStartX.current;
+    if (delta < -50) next();
+    else if (delta > 50) prev();
+  }, [next, prev]);
+
+  useEffect(() => {
+    startRef.current = Date.now();
+    timerRef.current = setInterval(() => {
+      const elapsed = Date.now() - startRef.current;
+      const pct = Math.min(elapsed / INTERVAL, 1);
+      setProgress(pct);
+      if (pct >= 1) {
+        setCurrent((c) => (c + 1) % SLIDES.length);
+        setProgress(0);
+        startRef.current = Date.now();
+      }
+    }, 50);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [current]);
+
   const { data: apps } = useQuery({
     queryKey: ['apps', 'home'],
     queryFn: () => listApps(undefined, 12),
   });
 
+  const slide = SLIDES[current];
+
   return (
     <div>
-      {/* Hero */}
-      <section className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-          <div className="max-w-2xl">
+      {/* Hero Carousel */}
+      <section
+        className={`relative bg-gradient-to-br ${slide.gradient} text-white transition-colors duration-700`}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:px-16">
+          <div className="max-w-2xl min-h-[180px]">
             <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
-              Apps that respect developers
+              {slide.title}
             </h1>
-            <p className="mt-4 text-lg text-emerald-100">
-              FriendlyHub is a Flatpak repository that's actually friendly. Clear review
-              criteria, automated builds, no gatekeeping on non-safety concerns.
+            <p className="mt-4 text-lg text-white/80">
+              {slide.body}
             </p>
             <div className="mt-8 flex gap-4">
               <Link
                 to="/apps"
-                className="bg-white text-emerald-700 px-6 py-3 rounded-lg font-semibold hover:bg-emerald-50 transition-colors"
+                className="bg-white text-gray-900 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
               >
                 Browse Apps
               </Link>
@@ -33,12 +104,49 @@ export default function Home() {
                 href="https://github.com/friendlyhub"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="border border-emerald-300 text-white px-6 py-3 rounded-lg font-semibold hover:bg-emerald-500/20 transition-colors"
+                className="border border-white/40 text-white px-6 py-3 rounded-lg font-semibold hover:bg-white/10 transition-colors"
               >
                 Publish Your App
               </a>
             </div>
           </div>
+        </div>
+
+        <button
+          onClick={prev}
+          className="absolute left-6 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors cursor-pointer hidden md:flex"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        <button
+          onClick={next}
+          className="absolute right-6 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors cursor-pointer hidden md:flex"
+        >
+          <ChevronRight className="w-5 h-5" />
+        </button>
+
+        {/* Dots with countdown ring */}
+        <div className="flex justify-center gap-3 pb-8">
+          {SLIDES.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => goTo(i)}
+              className="relative w-6 h-6 flex items-center justify-center cursor-pointer"
+            >
+              <svg className="absolute inset-0 w-6 h-6 -rotate-90" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" fill="none" stroke="white" strokeOpacity={0.3} strokeWidth={2} />
+                {i === current && (
+                  <circle
+                    cx="12" cy="12" r="10" fill="none" stroke="white" strokeWidth={2}
+                    strokeDasharray={62.83}
+                    strokeDashoffset={62.83 * (1 - progress)}
+                    strokeLinecap="round"
+                  />
+                )}
+              </svg>
+              <span className={`w-2 h-2 rounded-full ${i === current ? 'bg-white' : 'bg-white/40'}`} />
+            </button>
+          ))}
         </div>
       </section>
 
