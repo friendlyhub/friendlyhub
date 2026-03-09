@@ -712,7 +712,7 @@ resources:
                   SYNC_OUT=$(aws s3 sync /var/data/flatmanager/repo "s3://${BUCKET}/repo" --delete --exclude "friendlyhub.flatpakrepo" 2>&1)
                   if echo "$SYNC_OUT" | grep -q "upload:\|delete:"; then
                     echo "Changes detected, invalidating CloudFront cache..."
-                    aws cloudfront create-invalidation --distribution-id "${CF_DISTRIBUTION}" --paths "/repo/summary" "/repo/summary.idx" "/repo/appstream/*" --no-cli-pager 2>&1
+                    aws cloudfront create-invalidation --distribution-id "${CF_DISTRIBUTION}" --paths "/repo/summary" "/repo/summary.sig" "/repo/summary.idx" "/repo/summary.idx.sig" "/repo/summaries/*" "/repo/appstream/*" --no-cli-pager 2>&1
                     echo "Invalidation requested"
                     echo "Refreshing appstream metadata..."
                     python3 -c "import urllib.request; r=urllib.request.urlopen(urllib.request.Request('${API_URL}/api/v1/internal/refresh-appstream', method='POST', data=b'')); print(f'HTTP {r.status}: {r.read().decode()}')" 2>&1 || echo "Appstream refresh failed (non-fatal)"

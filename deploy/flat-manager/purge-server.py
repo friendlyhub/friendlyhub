@@ -51,9 +51,8 @@ def delete_refs(app_id: str) -> list[str]:
 
 
 def update_summary():
-    """Regenerate the OSTree repo summary file."""
-    cmd = ["ostree", "summary", "-u", "--repo", REPO_PATH]
-    # Sign if GPG key is available
+    """Regenerate the OSTree repo summary (legacy + indexed) with GPG signing."""
+    cmd = ["flatpak", "build-update-repo", "--no-update-appstream", REPO_PATH]
     if os.path.isdir(GPG_HOMEDIR):
         result = subprocess.run(
             ["gpg", "--homedir", GPG_HOMEDIR, "--list-keys", "--keyid-format", "long", "--with-colons"],
@@ -67,7 +66,7 @@ def update_summary():
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        raise RuntimeError(f"ostree summary -u failed: {result.stderr}")
+        raise RuntimeError(f"flatpak build-update-repo failed: {result.stderr}")
 
 
 class PurgeHandler(http.server.BaseHTTPRequestHandler):
