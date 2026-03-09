@@ -22,6 +22,7 @@ pub fn routes() -> Router<AppState> {
         .route("/apps/{app_id}", get(get_app).put(update_app).delete(delete_app))
         .route("/apps/{app_id}/unpublish", axum::routing::post(unpublish_app))
         .route("/apps/{app_id}/flatpakref", get(get_flatpakref))
+        .route("/apps/{app_id}/build-progress/{run_id}", get(get_build_progress))
         .route("/apps/{app_id}/verify", axum::routing::post(verify_domain))
         .route("/apps/verification/check-domain", axum::routing::post(check_domain_status))
 }
@@ -352,6 +353,19 @@ async fn get_flatpakref(
         ],
         body,
     ))
+}
+
+async fn get_build_progress(
+    State(state): State<AppState>,
+    Path((app_id, run_id)): Path<(String, i64)>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    // Verify the app exists (no auth required - build progress is public)
+    app::find_by_app_id(&state.db, &app_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("App not found".into()))?;
+
+    let jobs = state.github.get_run_jobs(&app_id, run_id).await?;
+    Ok(Json(jobs))
 }
 
 async fn verify_domain(

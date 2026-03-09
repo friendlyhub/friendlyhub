@@ -27,11 +27,8 @@ interface GitHubJobsResponse {
 }
 
 async function fetchGitHubJobs(appId: string, runId: number): Promise<GitHubJobsResponse> {
-  const res = await fetch(
-    `https://api.github.com/repos/friendlyhub/${appId}/actions/runs/${runId}/jobs`,
-    { headers: { Accept: 'application/vnd.github+json' } },
-  );
-  if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+  const res = await fetch(`/api/v1/apps/${appId}/build-progress/${runId}`);
+  if (!res.ok) throw new Error(`Build progress API ${res.status}`);
   return res.json();
 }
 

@@ -13,6 +13,7 @@ pub fn routes() -> Router<AppState> {
         .route("/internal/flat-manager-url", get(flat_manager_url))
         .route("/internal/refresh-appstream", post(refresh_appstream))
         .route("/internal/process-install-counts", post(process_install_counts))
+        .route("/internal/update-summary", post(update_summary))
 }
 
 async fn flat_manager_url(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
@@ -79,6 +80,12 @@ async fn refresh_appstream(State(state): State<AppState>) -> Result<Json<Value>,
         "updated": updated,
         "errors": errors,
     })))
+}
+
+/// Regenerate the OSTree repo summary file (with GPG signature).
+async fn update_summary(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
+    state.flat_manager.update_summary().await?;
+    Ok(Json(json!({ "summary_updated": true })))
 }
 
 /// Process CloudFront access logs to count app installs.

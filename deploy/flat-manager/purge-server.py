@@ -72,7 +72,7 @@ def update_summary():
 
 class PurgeHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
-        if self.path != "/purge":
+        if self.path not in ("/purge", "/update-summary"):
             self.send_error(404)
             return
 
@@ -80,6 +80,20 @@ class PurgeHandler(http.server.BaseHTTPRequestHandler):
         auth = self.headers.get("Authorization", "")
         if not PURGE_SECRET or auth != f"Bearer {PURGE_SECRET}":
             self.send_error(403, "Forbidden")
+            return
+
+        if self.path == "/update-summary":
+            try:
+                update_summary()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"summary_updated": True}).encode())
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
             return
 
         # Read body
