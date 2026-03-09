@@ -18,8 +18,6 @@ export default function InstallApp() {
   useEffect(() => {
     if (!appId || triggered.current) return;
     triggered.current = true;
-    // Use flatpak+https:// protocol to trigger GNOME Software / KDE Discover.
-    // Systems with a registered handler will open the software manager directly.
     window.location.href = flatpakInstallUrl(appId);
   }, [appId]);
 
@@ -55,8 +53,7 @@ export default function InstallApp() {
           (e.g. GNOME Software, KDE Discover).
         </p>
         <p className="text-emerald-700 text-sm mt-2">
-          If nothing happened, your system may not support flatpak+https URLs.
-          Try the options below.
+          If nothing happened, try the options below.
         </p>
       </div>
 
