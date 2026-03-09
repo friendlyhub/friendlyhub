@@ -11,6 +11,7 @@ import NewApp from './pages/NewApp';
 import SubmitVersion from './pages/SubmitVersion';
 import SubmissionDetail from './pages/SubmissionDetail';
 import ReviewQueue from './pages/ReviewQueue';
+import Users from './pages/Users';
 import InstallApp from './pages/InstallApp';
 import VerifyApp from './pages/VerifyApp';
 import AuthCallback from './pages/AuthCallback';
@@ -36,6 +37,13 @@ function ReviewerRoute({ children }: { children: React.ReactNode }) {
   if (loading) return <div className="text-center py-12 text-gray-500">Loading...</div>;
   if (!user || (user.role !== 'reviewer' && user.role !== 'admin'))
     return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuthStore();
+  if (loading) return <div className="text-center py-12 text-gray-500">Loading...</div>;
+  if (!user || user.role !== 'admin') return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -96,6 +104,14 @@ function AppRoutes() {
             <ProtectedRoute>
               <SubmissionDetail />
             </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/users"
+          element={
+            <AdminRoute>
+              <Users />
+            </AdminRoute>
           }
         />
         <Route

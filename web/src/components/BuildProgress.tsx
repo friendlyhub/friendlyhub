@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle, XCircle, Loader2, Circle, ExternalLink, Hammer } from 'lucide-react';
 import CollapsibleCard from './CollapsibleCard';
@@ -75,12 +75,22 @@ export default function BuildProgress({ appId, runId, runUrl, isBuilding }: Prop
     return () => clearInterval(id);
   }, [isBuilding]);
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['ghaBuildProgress', appId, runId],
     queryFn: () => fetchGitHubJobs(appId, runId),
     refetchInterval: isBuilding ? 10_000 : false,
     staleTime: isBuilding ? 5_000 : 60_000,
   });
+
+  // When build finishes (isBuilding flips false), do one final refetch so the
+  // card shows completed steps instead of staying stuck on "Building Flatpak".
+  const wasBuilding = useRef(isBuilding);
+  useEffect(() => {
+    if (wasBuilding.current && !isBuilding) {
+      refetch();
+    }
+    wasBuilding.current = isBuilding;
+  }, [isBuilding, refetch]);
 
   if (isLoading) {
     return (

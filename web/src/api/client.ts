@@ -142,3 +142,15 @@ export const submitReviewDecision = (id: string, decision: string, comment: stri
       body: JSON.stringify({ decision, comment }),
     },
   );
+
+// Admin
+export const getAdminUsers = () => request<User[]>('/admin/users');
+
+export const updateUserRole = (id: string, role: string) =>
+  request<{ status: string }>(`/admin/users/${id}/role`, {
+    method: 'PUT',
+    body: JSON.stringify({ role }),
+  });
+
+export const deleteUser = (id: string) =>
+  request<{ status: string }>(`/admin/users/${id}`, { method: 'DELETE' });

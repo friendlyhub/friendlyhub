@@ -33,6 +33,7 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api/v1", routes::submissions::routes())
         .nest("/api/v1", routes::webhooks::routes())
         .nest("/api/v1", routes::review::routes())
+        .nest("/api/v1", routes::admin::routes())
         .nest("/api/v1", routes::internal::routes())
         .layer(TraceLayer::new_for_http())
         .layer(cors)

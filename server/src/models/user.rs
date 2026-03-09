@@ -28,6 +28,7 @@ pub struct UserResponse {
     pub display_name: String,
     pub avatar_url: Option<String>,
     pub role: String,
+    pub created_at: DateTime<Utc>,
 }
 
 impl From<User> for UserResponse {
@@ -38,6 +39,7 @@ impl From<User> for UserResponse {
             display_name: u.display_name,
             avatar_url: u.avatar_url,
             role: u.role,
+            created_at: u.created_at,
         }
     }
 }
@@ -154,6 +156,71 @@ async fn find_by_github_id(db: &Db, github_id: i64) -> Result<Option<User>, AppE
         Some(item) => Ok(Some(User::from_item(item)?)),
         None => Ok(None),
     }
+}
+
+pub async fn list_all(db: &Db) -> Result<Vec<User>, AppError> {
+    let mut users = Vec::new();
+    let mut exclusive_start_key = None;
+
+    loop {
+        let mut scan = db
+            .client
+            .scan()
+            .table_name(&db.table)
+            .filter_expression("entity_type = :et")
+            .expression_attribute_values(":et", AttributeValue::S("User".into()));
+
+        if let Some(key) = exclusive_start_key {
+            scan = scan.set_exclusive_start_key(Some(key));
+        }
+
+        let result = scan
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("DynamoDB scan failed: {e}")))?;
+
+        for item in result.items() {
+            users.push(User::from_item(item)?);
+        }
+
+        match result.last_evaluated_key() {
+            Some(key) => exclusive_start_key = Some(key.to_owned()),
+            None => break,
+        }
+    }
+
+    users.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+    Ok(users)
+}
+
+pub async fn update_role(db: &Db, id: Uuid, role: &str) -> Result<(), AppError> {
+    let key = format!("USER#{id}");
+    db.client
+        .update_item()
+        .table_name(&db.table)
+        .key("PK", AttributeValue::S(key.clone()))
+        .key("SK", AttributeValue::S(key))
+        .update_expression("SET #r = :role, updated_at = :now")
+        .expression_attribute_names("#r", "role")
+        .expression_attribute_values(":role", AttributeValue::S(role.to_string()))
+        .expression_attribute_values(":now", AttributeValue::S(Utc::now().to_rfc3339()))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("DynamoDB update_item failed: {e}")))?;
+    Ok(())
+}
+
+pub async fn delete(db: &Db, id: Uuid) -> Result<(), AppError> {
+    let key = format!("USER#{id}");
+    db.client
+        .delete_item()
+        .table_name(&db.table)
+        .key("PK", AttributeValue::S(key.clone()))
+        .key("SK", AttributeValue::S(key))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("DynamoDB delete_item failed: {e}")))?;
+    Ok(())
 }
 
 pub async fn find_by_id(db: &Db, id: Uuid) -> Result<Option<User>, AppError> {

@@ -4,6 +4,7 @@ export interface User {
   display_name: string;
   avatar_url: string | null;
   role: string;
+  created_at?: string;
 }
 
 export interface Screenshot {
