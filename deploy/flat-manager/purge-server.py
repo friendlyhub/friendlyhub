@@ -52,7 +52,7 @@ def delete_refs(app_id: str) -> list[str]:
 
 def update_summary():
     """Regenerate the OSTree repo summary (legacy + indexed) with GPG signing."""
-    cmd = ["flatpak", "build-update-repo", "--no-update-appstream", REPO_PATH]
+    cmd = ["flatpak", "build-update-repo", REPO_PATH]
     if os.path.isdir(GPG_HOMEDIR):
         result = subprocess.run(
             ["gpg", "--homedir", GPG_HOMEDIR, "--list-keys", "--keyid-format", "long", "--with-colons"],
