@@ -50,19 +50,63 @@ def delete_refs(app_id: str) -> list[str]:
     return deleted
 
 
-def update_summary():
-    """Regenerate the OSTree repo summary (legacy + indexed) with GPG signing."""
-    cmd = ["flatpak", "build-update-repo", REPO_PATH]
-    if os.path.isdir(GPG_HOMEDIR):
-        result = subprocess.run(
-            ["gpg", "--homedir", GPG_HOMEDIR, "--list-keys", "--keyid-format", "long", "--with-colons"],
+def get_gpg_key_id() -> str | None:
+    """Return the GPG key ID from the homedir, or None."""
+    if not os.path.isdir(GPG_HOMEDIR):
+        return None
+    result = subprocess.run(
+        ["gpg", "--homedir", GPG_HOMEDIR, "--list-keys", "--keyid-format", "long", "--with-colons"],
+        capture_output=True, text=True,
+    )
+    for line in result.stdout.split("\n"):
+        if line.startswith("pub"):
+            return line.split(":")[4]
+    return None
+
+
+def sign_unsigned_commits(key_id: str):
+    """GPG-sign any commits that lack signatures."""
+    result = subprocess.run(
+        ["ostree", "refs", "--repo", REPO_PATH],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        return
+    for ref in result.stdout.strip().split("\n"):
+        ref = ref.strip()
+        if not ref:
+            continue
+        rev = subprocess.run(
+            ["ostree", "rev-parse", "--repo", REPO_PATH, ref],
             capture_output=True, text=True,
         )
-        for line in result.stdout.split("\n"):
-            if line.startswith("pub"):
-                key_id = line.split(":")[4]
-                cmd.extend([f"--gpg-homedir={GPG_HOMEDIR}", f"--gpg-sign={key_id}"])
-                break
+        if rev.returncode != 0:
+            continue
+        commit = rev.stdout.strip()
+        show = subprocess.run(
+            ["ostree", "show", "--repo", REPO_PATH, "--gpg-homedir=" + GPG_HOMEDIR, commit],
+            capture_output=True, text=True,
+        )
+        if "Good signature" in show.stdout or "Good signature" in show.stderr:
+            continue
+        print(f"[purge-server] Signing unsigned commit {commit} ({ref})", file=sys.stderr)
+        subprocess.run(
+            ["ostree", "gpg-sign", "--repo", REPO_PATH,
+             "--gpg-homedir=" + GPG_HOMEDIR, commit, key_id],
+            capture_output=True, text=True,
+        )
+
+
+def update_summary():
+    """Regenerate the OSTree repo summary (legacy + indexed) with GPG signing."""
+    key_id = get_gpg_key_id()
+
+    if key_id:
+        sign_unsigned_commits(key_id)
+
+    cmd = ["flatpak", "build-update-repo", REPO_PATH]
+    if key_id:
+        cmd.extend([f"--gpg-homedir={GPG_HOMEDIR}", f"--gpg-sign={key_id}"])
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
