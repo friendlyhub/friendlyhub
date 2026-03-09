@@ -104,7 +104,14 @@ def update_summary():
     if key_id:
         sign_unsigned_commits(key_id)
 
-    cmd = ["flatpak", "build-update-repo", REPO_PATH]
+    # Remove stale static deltas so they get regenerated with signed metadata
+    import shutil
+    for d in ("deltas", "delta-indexes"):
+        p = os.path.join(REPO_PATH, d)
+        if os.path.isdir(p):
+            shutil.rmtree(p)
+
+    cmd = ["flatpak", "build-update-repo", "--generate-static-deltas", REPO_PATH]
     if key_id:
         cmd.extend([f"--gpg-homedir={GPG_HOMEDIR}", f"--gpg-sign={key_id}"])
 
