@@ -48,7 +48,7 @@ export default function Home() {
           <h2 className="text-lg font-semibold mb-3">Add FriendlyHub to your system</h2>
           <code className="block bg-gray-800 rounded-lg p-4 text-sm font-mono text-emerald-400">
             flatpak remote-add --if-not-exists friendlyhub
-            https://friendlyhub.org/repo/friendlyhub.flatpakrepo
+            https://dl.friendlyhub.org/repo/friendlyhub.flatpakrepo
           </code>
         </div>
       </section>

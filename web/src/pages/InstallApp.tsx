@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
 import { getApp } from '../api/client';
 import { Download, ExternalLink } from 'lucide-react';
-import { REPO_URL, REPO_NAME, flatpakrefUrl, flatpakInstallUrl } from '../config/repo';
+import { REPO_NAME, FLATPAKREPO_URL, flatpakrefUrl, flatpakInstallUrl } from '../config/repo';
 
 export default function InstallApp() {
   const { appId } = useParams<{ appId: string }>();
@@ -90,7 +90,7 @@ export default function InstallApp() {
             </p>
             <div className="space-y-2">
               <code className="block bg-gray-900 text-emerald-400 rounded-lg p-3 text-sm font-mono">
-                flatpak remote-add --if-not-exists {REPO_NAME} {REPO_URL}
+                flatpak remote-add --if-not-exists {REPO_NAME} {FLATPAKREPO_URL}
               </code>
               <code className="block bg-gray-900 text-emerald-400 rounded-lg p-3 text-sm font-mono">
                 flatpak install {REPO_NAME} {appId}

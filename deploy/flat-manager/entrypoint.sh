@@ -59,7 +59,7 @@ cat > "${CONFIG_PATH}" <<EOF
             "collection-id": "org.friendlyhub.Stable",
             "suggested-repo-name": "friendlyhub",
             "runtime-repo-url": "https://dl.flathub.org/repo/flathub.flatpakrepo",
-            "gpg-key": null,
+            "gpg-key": $([ -n "${GPG_KEY_ID}" ] && echo "\"${GPG_KEY_ID}\"" || echo "null"),
             "base-url": "https://dl.friendlyhub.org/repo",
             "subsets": {
                 "all": {
