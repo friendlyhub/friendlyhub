@@ -234,9 +234,9 @@ export default function ManifestEditor({
   }, [onLoadFile]);
 
   return (
-    <div className="flex flex-col h-full border-l border-gray-200">
+    <div className="flex flex-col h-full border-l border-gray-200 dark:border-gray-800">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50 border-b border-gray-200">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50 dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -244,8 +244,8 @@ export default function ManifestEditor({
             disabled={converting}
             className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
               format === 'yaml'
-                ? 'bg-emerald-100 text-emerald-700'
-                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-800'
             }`}
           >
             YAML
@@ -256,8 +256,8 @@ export default function ManifestEditor({
             disabled={converting}
             className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
               format === 'json'
-                ? 'bg-emerald-100 text-emerald-700'
-                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-800'
             }`}
           >
             JSON
@@ -274,7 +274,7 @@ export default function ManifestEditor({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-800 transition-colors"
           >
             <Upload className="w-3.5 h-3.5" />
             Load
@@ -284,7 +284,7 @@ export default function ManifestEditor({
 
       {/* Parse error banner */}
       {parseError && (
-        <div className="px-3 py-1.5 bg-red-50 border-b border-red-200 text-xs text-red-600 truncate">
+        <div className="px-3 py-1.5 bg-red-50 dark:bg-red-950 border-b border-red-200 dark:border-red-800 text-xs text-red-600 dark:text-red-400 truncate">
           {parseError}
         </div>
       )}

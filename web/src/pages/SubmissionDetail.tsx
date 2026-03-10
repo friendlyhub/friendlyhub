@@ -89,25 +89,25 @@ export default function SubmissionDetail({ reviewMode = false }: Props) {
     },
   };
 
-  if (isLoading) return <div className="text-center py-12 text-gray-500">Loading...</div>;
+  if (isLoading) return <div className="text-center py-12 text-gray-500 dark:text-gray-400">Loading...</div>;
   if (!data) return null;
 
   const { submission: sub, reviews, checks, app: appInfo } = data;
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-1">
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-1">
         {reviewMode ? `Review: ${appInfo?.name ?? 'Unknown App'} ` : 'Submission '}v{sub.version}
       </h1>
       {appInfo && (
-        <p className="text-sm text-gray-500 mb-2 font-mono">{appInfo.app_id}</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2 font-mono">{appInfo.app_id}</p>
       )}
       <div className="flex items-center gap-3 mb-6">
         <StatusBadge status={sub.status} />
         {sub.build_log_url && (
           <a
             href={sub.build_log_url}
-            className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 font-medium"
+            className="inline-flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 font-medium"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -121,8 +121,8 @@ export default function SubmissionDetail({ reviewMode = false }: Props) {
       {reviews.length > 0 && (
         <div className={`rounded-xl border p-6 mb-6 ${
           reviews[reviews.length - 1].decision === 'approved'
-            ? 'bg-green-50 border-green-200'
-            : 'bg-orange-50 border-orange-200'
+            ? 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800'
+            : 'bg-orange-50 dark:bg-orange-950 border-orange-200 dark:border-orange-800'
         }`}>
           {reviews.map((rev) => {
             const isApproved = rev.decision === 'approved';
@@ -166,22 +166,22 @@ export default function SubmissionDetail({ reviewMode = false }: Props) {
 
       <div className="space-y-6">
         {/* Info */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
           <dl className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <dt className="text-gray-500">Submission ID</dt>
-              <dd className="font-mono text-gray-900 text-xs">{sub.id}</dd>
+              <dt className="text-gray-500 dark:text-gray-400">Submission ID</dt>
+              <dd className="font-mono text-gray-900 dark:text-gray-100 text-xs">{sub.id}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Submitted</dt>
-              <dd className="text-gray-900">
+              <dt className="text-gray-500 dark:text-gray-400">Submitted</dt>
+              <dd className="text-gray-900 dark:text-gray-100">
                 {formatDate(sub.created_at)}
               </dd>
             </div>
             {sub.fm_build_id && (
               <div>
-                <dt className="text-gray-500">flat-manager Build</dt>
-                <dd className="font-mono text-gray-900">#{sub.fm_build_id}</dd>
+                <dt className="text-gray-500 dark:text-gray-400">flat-manager Build</dt>
+                <dd className="font-mono text-gray-900 dark:text-gray-100">#{sub.fm_build_id}</dd>
               </div>
             )}
           </dl>
@@ -205,14 +205,14 @@ export default function SubmissionDetail({ reviewMode = false }: Props) {
 
         {/* Decision form (reviewer only) */}
         {reviewMode && sub.status === 'pending_review' && (
-          <div ref={decisionRef} className="bg-white rounded-xl border border-gray-200 p-6">
+          <div ref={decisionRef} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Your Decision</h2>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Your Decision</h2>
               {comment.trim() && (
                 <button
                   type="button"
                   onClick={() => setShowPreview(!showPreview)}
-                  className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                  className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
                 >
                   {showPreview ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   {showPreview ? 'Edit' : 'Preview'}
@@ -221,7 +221,7 @@ export default function SubmissionDetail({ reviewMode = false }: Props) {
             </div>
 
             {showPreview ? (
-              <div className="border border-gray-200 rounded-lg p-4 mb-4 min-h-30 prose prose-sm max-w-none">
+              <div className="border border-gray-200 dark:border-gray-800 rounded-lg p-4 mb-4 min-h-30 prose prose-sm dark:prose-invert max-w-none">
                 <ReactMarkdown components={mdComponents}>{comment}</ReactMarkdown>
               </div>
             ) : (
@@ -237,13 +237,13 @@ export default function SubmissionDetail({ reviewMode = false }: Props) {
                   onChange={(e) => setComment(e.target.value)}
                   rows={6}
                   placeholder="Leave a comment for the developer... Select text in the files above and click Quote to reference specific lines."
-                  className="w-full border border-gray-300 border-t-0 rounded-b-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 mb-4 font-mono"
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 border-t-0 rounded-b-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 mb-4 font-mono"
                 />
               </>
             )}
 
             {decision.isError && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mb-4">
+              <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-700 dark:text-red-400 mb-4">
                 {(decision.error as Error).message}
               </div>
             )}
@@ -270,7 +270,7 @@ export default function SubmissionDetail({ reviewMode = false }: Props) {
                   decision.mutate({ dec: 'changes_requested', cmt: comment });
                 }}
                 disabled={decision.isPending}
-                className="border border-orange-300 text-orange-700 px-6 py-2 rounded-lg text-sm font-medium hover:bg-orange-50 disabled:opacity-50"
+                className="border border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-400 px-6 py-2 rounded-lg text-sm font-medium hover:bg-orange-50 dark:hover:bg-orange-950 disabled:opacity-50"
               >
                 Request Changes
               </button>

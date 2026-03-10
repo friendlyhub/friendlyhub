@@ -42,7 +42,7 @@ function parseManifestText(text: string): Record<string, unknown> | null {
 function DragHandle({ cssVar }: { cssVar: string }) {
   return (
     <div
-      className="hidden lg:flex w-1.5 cursor-col-resize items-center justify-center bg-gray-100 border-x border-gray-200 hover:bg-emerald-100 active:bg-emerald-200 transition-colors select-none shrink-0"
+      className="hidden lg:flex w-1.5 cursor-col-resize items-center justify-center bg-gray-100 dark:bg-gray-800 border-x border-gray-200 dark:border-gray-800 hover:bg-emerald-100 dark:hover:bg-emerald-900 active:bg-emerald-200 dark:active:bg-emerald-800 transition-colors select-none shrink-0"
       onMouseDown={(e) => {
         e.preventDefault();
         const container = e.currentTarget.parentElement!;
@@ -71,7 +71,7 @@ function DragHandle({ cssVar }: { cssVar: string }) {
         document.addEventListener('mouseup', onMouseUp);
       }}
     >
-      <div className="w-0.5 h-6 rounded-full bg-gray-300" />
+      <div className="w-0.5 h-6 rounded-full bg-gray-300 dark:bg-gray-600" />
     </div>
   );
 }
@@ -102,8 +102,8 @@ function SourceFileDropzone({
 
   if (loaded) {
     return (
-      <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
-        <span className="text-sm font-mono text-emerald-700 flex-1">{filename}</span>
+      <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 rounded-lg">
+        <span className="text-sm font-mono text-emerald-700 dark:text-emerald-400 flex-1">{filename}</span>
         <button
           type="button"
           onClick={onRemove}
@@ -118,7 +118,7 @@ function SourceFileDropzone({
   return (
     <div
       className={`flex flex-col items-center gap-1 px-4 py-4 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
-        dragOver ? 'border-emerald-400 bg-emerald-50' : 'border-gray-300 hover:border-gray-400'
+        dragOver ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-950' : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
       }`}
       onClick={() => inputRef.current?.click()}
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -141,8 +141,8 @@ function SourceFileDropzone({
         }}
       />
       <Upload className="w-5 h-5 text-gray-400" />
-      <span className="text-sm font-mono text-gray-700">{filename}</span>
-      <span className="text-xs text-red-500">required</span>
+      <span className="text-sm font-mono text-gray-700 dark:text-gray-300">{filename}</span>
+      <span className="text-xs text-red-500 dark:text-red-400">required</span>
     </div>
   );
 }
@@ -309,7 +309,7 @@ export default function SubmitVersion() {
   };
 
   if (appLoading) {
-    return <div className="text-center py-12 text-gray-500">Loading...</div>;
+    return <div className="text-center py-12 text-gray-500 dark:text-gray-400">Loading...</div>;
   }
 
   if (!app) {
@@ -319,28 +319,28 @@ export default function SubmitVersion() {
   return (
     <div className="flex flex-col min-h-0">
       {/* Header */}
-      <div className="px-4 sm:px-6 py-3 bg-white border-b border-gray-200">
+      <div className="px-4 sm:px-6 py-3 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
         <div className="flex items-center justify-between">
           <div>
             <Link
               to={`/apps/${app.app_id}`}
-              className="text-xs text-emerald-600 hover:text-emerald-700"
+              className="text-xs text-emerald-600 hover:text-emerald-700 dark:text-emerald-400"
             >
               &larr; {app.name}
             </Link>
-            <h1 className="text-lg font-bold text-gray-900">
+            <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">
               Submit New Version
-              <span className="text-sm font-normal text-gray-500 ml-2 font-mono">{app.app_id}</span>
+              <span className="text-sm font-normal text-gray-500 dark:text-gray-400 ml-2 font-mono">{app.app_id}</span>
             </h1>
           </div>
 
           {/* Mobile view toggle */}
-          <div className="flex lg:hidden items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+          <div className="flex lg:hidden items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5">
             <button
               type="button"
               onClick={() => setMobileView('form')}
               className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                mobileView === 'form' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                mobileView === 'form' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400'
               }`}
             >
               <FormInput className="w-3.5 h-3.5" /> Form
@@ -349,7 +349,7 @@ export default function SubmitVersion() {
               type="button"
               onClick={() => setMobileView('editor')}
               className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                mobileView === 'editor' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                mobileView === 'editor' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400'
               }`}
             >
               <FileCode className="w-3.5 h-3.5" /> Code
@@ -359,9 +359,9 @@ export default function SubmitVersion() {
       </div>
 
       {/* Manifest card */}
-      <div className="mx-4 sm:mx-6 mt-4 border border-gray-200 rounded-lg overflow-hidden">
-        <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
-          <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+      <div className="mx-4 sm:mx-6 mt-4 border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
+        <div className="px-4 py-2 bg-gray-50 dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
             <FileCode className="w-4 h-4" />
             Flatpak Manifest
           </h2>
@@ -370,7 +370,7 @@ export default function SubmitVersion() {
         <div className="flex relative">
           {/* Form pane (left) */}
           <div
-            className={`lg:block ${mobileView === 'form' ? 'w-full' : 'hidden'} bg-white overflow-y-auto`}
+            className={`lg:block ${mobileView === 'form' ? 'w-full' : 'hidden'} bg-white dark:bg-gray-900 overflow-y-auto`}
             style={{ width: 'var(--form-width, 50%)' }}
           >
             <ManifestForm
@@ -401,9 +401,9 @@ export default function SubmitVersion() {
       </div>
 
       {/* Metainfo card */}
-      <div className="mx-4 sm:mx-6 mt-4 border border-gray-200 rounded-lg overflow-hidden">
-        <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
-          <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+      <div className="mx-4 sm:mx-6 mt-4 border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
+        <div className="px-4 py-2 bg-gray-50 dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
             <FileText className="w-4 h-4" />
             AppStream Metainfo
           </h2>
@@ -412,7 +412,7 @@ export default function SubmitVersion() {
         <div className="flex relative">
           {/* Form pane (left) */}
           <div
-            className={`lg:block ${mobileView === 'form' ? 'w-full' : 'hidden'} bg-white overflow-y-auto`}
+            className={`lg:block ${mobileView === 'form' ? 'w-full' : 'hidden'} bg-white dark:bg-gray-900 overflow-y-auto`}
             style={{ width: 'var(--metainfo-width, 50%)' }}
           >
             <MetainfoForm
@@ -442,9 +442,9 @@ export default function SubmitVersion() {
 
       {/* External source files */}
       {externalSourceFiles.length > 0 && (
-        <div className="mx-4 sm:mx-6 mt-4 border border-gray-200 rounded-lg overflow-hidden">
-          <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
-            <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+        <div className="mx-4 sm:mx-6 mt-4 border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
+          <div className="px-4 py-2 bg-gray-50 dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
               <Upload className="w-4 h-4" />
               Source Files
               <span className="text-xs font-normal text-gray-400 ml-1">
@@ -471,17 +471,17 @@ export default function SubmitVersion() {
       )}
 
       {/* Submission area */}
-      <div className="bg-white border-t border-gray-200 px-4 sm:px-6 py-4 mt-4">
+      <div className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 px-4 sm:px-6 py-4 mt-4">
         <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-4">
           {/* Errors */}
           {(submitError || mutation.isError) && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+            <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-700 dark:text-red-400">
               {submitError || (mutation.error as Error).message}
             </div>
           )}
 
           {/* Beta notice */}
-          <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700">
+          <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-sm text-amber-700 dark:text-amber-400">
             <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
             <p>
               The Flatpak manifest &amp; AppStream metainfo editor and validator are in beta

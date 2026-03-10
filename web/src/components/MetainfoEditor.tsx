@@ -89,10 +89,10 @@ export default function MetainfoEditor({
   }, [onLoadFile]);
 
   return (
-    <div className="flex flex-col h-full border-l border-gray-200">
+    <div className="flex flex-col h-full border-l border-gray-200 dark:border-gray-800">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50 border-b border-gray-200">
-        <span className="text-xs font-medium text-gray-500">XML</span>
+      <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50 dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
+        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">XML</span>
         <div>
           <input
             ref={fileInputRef}
@@ -104,7 +104,7 @@ export default function MetainfoEditor({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-800 transition-colors"
           >
             <Upload className="w-3.5 h-3.5" />
             Load
@@ -114,7 +114,7 @@ export default function MetainfoEditor({
 
       {/* Parse error banner */}
       {parseError && (
-        <div className="px-3 py-1.5 bg-red-50 border-b border-red-200 text-xs text-red-600 truncate">
+        <div className="px-3 py-1.5 bg-red-50 dark:bg-red-950 border-b border-red-200 dark:border-red-800 text-xs text-red-600 dark:text-red-400 truncate">
           {parseError}
         </div>
       )}

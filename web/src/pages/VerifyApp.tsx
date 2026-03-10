@@ -62,21 +62,21 @@ export default function VerifyApp() {
   };
 
   if (appLoading || domainLoading) {
-    return <div className="text-center py-12 text-gray-500">Loading...</div>;
+    return <div className="text-center py-12 text-gray-500 dark:text-gray-400">Loading...</div>;
   }
 
   if (!app) {
-    return <div className="text-center py-12 text-gray-500">App not found</div>;
+    return <div className="text-center py-12 text-gray-500 dark:text-gray-400">App not found</div>;
   }
 
   if (app.is_verified) {
     return (
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-          <p className="text-gray-700 font-medium">This app is already verified.</p>
+        <div className="text-center py-12 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
+          <p className="text-gray-700 dark:text-gray-300 font-medium">This app is already verified.</p>
           <button
             onClick={() => navigate('/my/apps')}
-            className="mt-4 text-emerald-600 hover:text-emerald-700 font-medium"
+            className="mt-4 text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 font-medium"
           >
             Back to My Apps
           </button>
@@ -87,38 +87,38 @@ export default function VerifyApp() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-2">Verify Domain Ownership</h1>
-      <p className="text-gray-600 mb-6">
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Verify Domain Ownership</h1>
+      <p className="text-gray-600 dark:text-gray-400 mb-6">
         Verify ownership of <span className="font-semibold">{domain}</span> for{' '}
         <span className="font-mono font-semibold">{appId}</span>
       </p>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-        <p className="text-sm text-gray-700">
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 space-y-4">
+        <p className="text-sm text-gray-700 dark:text-gray-300">
           Place a text file at the following URL containing your verification token:
         </p>
 
-        <div className="bg-gray-50 rounded-lg p-3 font-mono text-sm text-gray-800 break-all">
+        <div className="bg-gray-50 dark:bg-gray-950 rounded-lg p-3 font-mono text-sm text-gray-800 dark:text-gray-200 break-all">
           {domainStatus?.well_known_url || `https://${domain}/.well-known/org.friendlyhub.VerifiedApps.txt`}
         </div>
 
         {domainStatus?.token && (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-700">Token:</span>
-              <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Token:</span>
+              <code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono dark:text-gray-100">
                 {showToken ? domainStatus.token : '••••••••••••••••'}
               </code>
               <button
                 onClick={() => setShowToken(!showToken)}
-                className="text-gray-500 hover:text-gray-700"
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
                 title={showToken ? 'Hide' : 'Reveal'}
               >
                 {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
               <button
                 onClick={handleCopyToken}
-                className="text-gray-500 hover:text-gray-700"
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
                 title="Copy token"
               >
                 {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
@@ -130,14 +130,14 @@ export default function VerifyApp() {
         <button
           onClick={handleDownloadFile}
           disabled={!domainStatus?.token}
-          className="inline-flex items-center gap-2 text-sm text-emerald-600 hover:text-emerald-700 font-medium disabled:opacity-50"
+          className="inline-flex items-center gap-2 text-sm text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 font-medium disabled:opacity-50"
         >
           <Download className="w-4 h-4" />
           Download verification file
         </button>
 
         {verifyError && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+          <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-700 dark:text-red-400">
             {verifyError}
           </div>
         )}
@@ -155,7 +155,7 @@ export default function VerifyApp() {
           </button>
           <button
             onClick={() => navigate('/my/apps')}
-            className="text-gray-600 hover:text-gray-800 px-4 py-2.5 text-sm font-medium"
+            className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300 px-4 py-2.5 text-sm font-medium"
           >
             Back
           </button>

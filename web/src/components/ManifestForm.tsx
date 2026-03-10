@@ -36,9 +36,9 @@ function ValidationPanel({ messages }: { messages: ValidationMessage[] }) {
   const infos = messages.filter(m => m.severity === 'info');
 
   const groups: { severity: 'error' | 'warning' | 'info'; items: ValidationMessage[]; label: string; Icon: typeof AlertCircle; color: string; bg: string }[] = [];
-  if (errors.length > 0) groups.push({ severity: 'error', items: errors, label: `${errors.length} error${errors.length > 1 ? 's' : ''}`, Icon: AlertCircle, color: 'text-red-600', bg: 'bg-red-50 border-red-200' });
-  if (warnings.length > 0) groups.push({ severity: 'warning', items: warnings, label: `${warnings.length} warning${warnings.length > 1 ? 's' : ''}`, Icon: AlertTriangle, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200' });
-  if (infos.length > 0) groups.push({ severity: 'info', items: infos, label: `${infos.length} suggestion${infos.length > 1 ? 's' : ''}`, Icon: Info, color: 'text-blue-500', bg: 'bg-blue-50 border-blue-200' });
+  if (errors.length > 0) groups.push({ severity: 'error', items: errors, label: `${errors.length} error${errors.length > 1 ? 's' : ''}`, Icon: AlertCircle, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800' });
+  if (warnings.length > 0) groups.push({ severity: 'warning', items: warnings, label: `${warnings.length} warning${warnings.length > 1 ? 's' : ''}`, Icon: AlertTriangle, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 border-amber-200 dark:bg-amber-950 dark:border-amber-800' });
+  if (infos.length > 0) groups.push({ severity: 'info', items: infos, label: `${infos.length} suggestion${infos.length > 1 ? 's' : ''}`, Icon: Info, color: 'text-blue-500 dark:text-blue-400', bg: 'bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800' });
 
   return (
     <div className="space-y-2">
@@ -94,7 +94,7 @@ function FieldInput({
           disabled={disabled}
           className="accent-emerald-600 w-4 h-4"
         />
-        <span className="text-sm text-gray-700">{field.label}</span>
+        <span className="text-sm text-gray-700 dark:text-gray-300">{field.label}</span>
       </label>
     );
   }
@@ -105,7 +105,7 @@ function FieldInput({
         value={(value as string) || ''}
         onChange={(e) => onChange(e.target.value || undefined)}
         disabled={disabled}
-        className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        className="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
       >
         <option value="">Select...</option>
         {field.enum?.map((opt) => (
@@ -123,7 +123,7 @@ function FieldInput({
         onChange={(e) => onChange(e.target.value ? Number(e.target.value) : undefined)}
         disabled={disabled}
         placeholder={field.placeholder}
-        className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        className="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
       />
     );
   }
@@ -135,7 +135,7 @@ function FieldInput({
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
       placeholder={field.placeholder}
-      className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-gray-100 disabled:text-gray-500"
+      className="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-900 dark:disabled:text-gray-500"
     />
   );
 }
@@ -172,12 +172,12 @@ function StringArrayInput({
               next[i] = e.target.value;
               onChange(next);
             }}
-            className="flex-1 rounded border border-gray-200 px-2 py-1 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            className="flex-1 rounded border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
           />
           <button
             type="button"
             onClick={() => onChange(value.filter((_, j) => j !== i))}
-            className="text-red-400 hover:text-red-600 p-0.5"
+            className="text-red-400 hover:text-red-600 dark:hover:text-red-400 p-0.5"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -190,13 +190,13 @@ function StringArrayInput({
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addItem(); } }}
           placeholder={placeholder || 'Add item...'}
-          className="flex-1 rounded border border-gray-200 px-2 py-1 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+          className="flex-1 rounded border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
         />
         <button
           type="button"
           onClick={addItem}
           disabled={!draft.trim()}
-          className="text-emerald-600 hover:text-emerald-700 disabled:text-gray-300 p-0.5"
+          className="text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 disabled:text-gray-300 dark:disabled:text-gray-600 p-0.5"
         >
           <Plus className="w-3.5 h-3.5" />
         </button>
@@ -236,21 +236,21 @@ function SourceEditor({
   const typeDef = SOURCE_TYPES.find(t => t.type === sourceType) || SOURCE_TYPES[0];
 
   return (
-    <div className="border border-gray-200 rounded-lg p-3 space-y-2.5 bg-gray-50/50">
+    <div className="border border-gray-200 dark:border-gray-800 rounded-lg p-3 space-y-2.5 bg-gray-50/50 dark:bg-gray-950/50">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-gray-500">Source Type</label>
+          <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Source Type</label>
           <select
             value={sourceType}
             onChange={(e) => onChange({ type: e.target.value })}
-            className="rounded border border-gray-200 px-2 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            className="rounded border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
           >
             {SOURCE_TYPES.map(t => (
               <option key={t.type} value={t.type}>{t.label}</option>
             ))}
           </select>
         </div>
-        <button type="button" onClick={onRemove} className="text-red-400 hover:text-red-600">
+        <button type="button" onClick={onRemove} className="text-red-400 hover:text-red-600 dark:hover:text-red-400">
           <Trash2 className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -259,7 +259,7 @@ function SourceEditor({
         if (field.type === 'string-array') {
           return (
             <div key={field.key}>
-              <label className="block text-xs font-medium text-gray-500 mb-1">{field.label}</label>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{field.label}</label>
               <StringArrayInput
                 value={(source[field.key] as string[]) || []}
                 onChange={(val) => onChange({ ...source, [field.key]: val })}
@@ -269,7 +269,7 @@ function SourceEditor({
         }
         return (
           <div key={field.key}>
-            <label className="block text-xs font-medium text-gray-500 mb-0.5">
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5">
               {field.label}
               {field.required && <span className="text-red-500 ml-0.5">*</span>}
             </label>
@@ -299,32 +299,32 @@ function ExternalModuleEditor({
   const filename = path.split('/').pop() || path;
 
   return (
-    <div className="border border-gray-200 rounded-lg bg-white">
+    <div className="border border-gray-200 dark:border-gray-800 rounded-lg bg-white dark:bg-gray-900">
       <div
-        className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-gray-50 rounded-t-lg"
+        className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-t-lg"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center gap-2">
           {expanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-          <span className="text-sm font-medium text-gray-700">{filename}</span>
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{filename}</span>
           <span className="text-xs text-gray-400">external module</span>
         </div>
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          className="text-red-400 hover:text-red-600"
+          className="text-red-400 hover:text-red-600 dark:hover:text-red-400"
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
       </div>
       {expanded && (
-        <div className="px-3 pb-3 border-t border-gray-100 pt-3">
-          <label className="block text-xs font-medium text-gray-500 mb-0.5">Path</label>
+        <div className="px-3 pb-3 border-t border-gray-100 dark:border-gray-800 pt-3">
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5">Path</label>
           <input
             type="text"
             value={path}
             onChange={(e) => onChange(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
         </div>
       )}
@@ -355,24 +355,24 @@ function ModuleEditor({
   }, [module, onChange]);
 
   return (
-    <div className="border border-gray-200 rounded-lg bg-white">
+    <div className="border border-gray-200 dark:border-gray-800 rounded-lg bg-white dark:bg-gray-900">
       <div
-        className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-gray-50 rounded-t-lg"
+        className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-t-lg"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center gap-2">
           {expanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-          <span className="text-sm font-medium text-gray-700">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
             {module.name || `Module ${index + 1}`}
           </span>
           {module.buildsystem && (
-            <span className="text-xs text-gray-400 font-mono">{module.buildsystem}</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">{module.buildsystem}</span>
           )}
         </div>
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          className="text-red-400 hover:text-red-600"
+          className="text-red-400 hover:text-red-600 dark:hover:text-red-400"
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
@@ -385,7 +385,7 @@ function ModuleEditor({
               const val = (module[field.key] as string[]) || [];
               return (
                 <div key={field.key}>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">{field.label}</label>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{field.label}</label>
                   <StringArrayInput
                     value={val}
                     onChange={(v) => updateField(field.key, v)}
@@ -395,7 +395,7 @@ function ModuleEditor({
             }
             return (
               <div key={field.key}>
-                <label className="block text-xs font-medium text-gray-500 mb-0.5">
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5">
                   {field.label}
                   {field.required && <span className="text-red-500 ml-0.5">*</span>}
                 </label>
@@ -410,7 +410,7 @@ function ModuleEditor({
 
           {/* Sources */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1.5">Sources</label>
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Sources</label>
             <div className="space-y-2">
               {(module.sources || []).map((src, si) => (
                 <SourceEditor
@@ -430,7 +430,7 @@ function ModuleEditor({
               <button
                 type="button"
                 onClick={() => updateField('sources', [...(module.sources || []), { type: 'archive' }])}
-                className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 font-medium"
+                className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 font-medium"
               >
                 <Plus className="w-3.5 h-3.5" /> Add Source
               </button>
@@ -462,7 +462,7 @@ function AddFieldPicker({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700 font-medium mt-2"
+        className="flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 font-medium mt-2"
       >
         <Plus className="w-4 h-4" /> Add Section
       </button>
@@ -470,7 +470,7 @@ function AddFieldPicker({
   }
 
   return (
-    <div className="border border-emerald-200 rounded-lg p-3 mt-2 bg-emerald-50/30">
+    <div className="border border-emerald-200 dark:border-emerald-800 rounded-lg p-3 mt-2 bg-emerald-50/30 dark:bg-emerald-950/30">
       <div className="flex items-center gap-2 mb-2">
         <Search className="w-4 h-4 text-gray-400" />
         <input
@@ -484,7 +484,7 @@ function AddFieldPicker({
         <button
           type="button"
           onClick={() => { setOpen(false); setSearch(''); }}
-          className="text-xs text-gray-500 hover:text-gray-700"
+          className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
         >
           Cancel
         </button>
@@ -498,9 +498,9 @@ function AddFieldPicker({
               key={f.key}
               type="button"
               onClick={() => { onAdd(f.key); setOpen(false); setSearch(''); }}
-              className="w-full text-left px-2 py-1.5 rounded text-sm hover:bg-emerald-100 transition-colors"
+              className="w-full text-left px-2 py-1.5 rounded text-sm hover:bg-emerald-100 dark:hover:bg-emerald-950 transition-colors"
             >
-              <span className="font-medium text-gray-700">{f.label}</span>
+              <span className="font-medium text-gray-700 dark:text-gray-300">{f.label}</span>
               {f.description && (
                 <span className="text-xs text-gray-400 ml-2">{f.description}</span>
               )}
@@ -565,10 +565,10 @@ export default function ManifestForm({ manifest, onChange, lockedAppId }: Manife
 
       {/* Required fields */}
       <div className="space-y-3">
-        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Required</h3>
+        <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Required</h3>
         {REQUIRED_FIELDS.map(field => (
           <div key={field.key}>
-            <label className="block text-sm font-medium text-gray-700 mb-0.5">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-0.5">
               {field.label} <span className="text-red-500">*</span>
             </label>
             <FieldInput
@@ -578,7 +578,7 @@ export default function ManifestForm({ manifest, onChange, lockedAppId }: Manife
               disabled={field.key === 'id'}
             />
             {field.description && (
-              <p className="text-xs text-gray-400 mt-0.5">{field.description}</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{field.description}</p>
             )}
           </div>
         ))}
@@ -587,11 +587,11 @@ export default function ManifestForm({ manifest, onChange, lockedAppId }: Manife
       {/* Active optional fields */}
       {activeOptionalKeys.size > 0 && (
         <div className="space-y-3">
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Options</h3>
+          <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Options</h3>
           {OPTIONAL_FIELDS.filter(f => activeOptionalKeys.has(f.key)).map(field => (
             <div key={field.key}>
               <div className="flex items-center justify-between mb-0.5">
-                <label className="text-sm font-medium text-gray-700">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {field.label}
                 </label>
                 <div className="flex items-center gap-2">
@@ -601,7 +601,7 @@ export default function ManifestForm({ manifest, onChange, lockedAppId }: Manife
                   <button
                     type="button"
                     onClick={() => handleRemoveOptionalField(field.key)}
-                    className="text-red-400 hover:text-red-600"
+                    className="text-red-400 hover:text-red-600 dark:hover:text-red-400"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -621,7 +621,7 @@ export default function ManifestForm({ manifest, onChange, lockedAppId }: Manife
                 />
               )}
               {field.description && (
-                <p className="text-xs text-gray-400 mt-0.5">{field.description}</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{field.description}</p>
               )}
             </div>
           ))}
@@ -630,7 +630,7 @@ export default function ManifestForm({ manifest, onChange, lockedAppId }: Manife
 
       {/* Modules */}
       <div className="space-y-3">
-        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+        <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
           Modules <span className="text-red-500">*</span>
         </h3>
         {(manifest.modules || []).map((mod, i) => {
@@ -675,7 +675,7 @@ export default function ManifestForm({ manifest, onChange, lockedAppId }: Manife
             const next = [...(manifest.modules || []), { name: '', buildsystem: 'simple', sources: [] }];
             updateField('modules', next);
           }}
-          className="flex items-center gap-1 text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+          className="flex items-center gap-1 text-sm text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 font-medium"
         >
           <Plus className="w-4 h-4" /> Add Module
         </button>

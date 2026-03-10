@@ -33,7 +33,7 @@ export default function SourceFileTabs({ files, onQuote }: Props) {
 
   return (
     <div>
-      <div className="flex overflow-x-auto border-b border-gray-200 bg-gray-50">
+      <div className="flex overflow-x-auto border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-950">
         {files.map((file) => (
           <button
             key={file.name}
@@ -41,8 +41,8 @@ export default function SourceFileTabs({ files, onQuote }: Props) {
             onClick={() => setActiveTab(file.name)}
             className={`px-4 py-2 text-xs font-mono whitespace-nowrap border-b-2 transition-colors ${
               activeTab === file.name
-                ? 'border-emerald-500 text-emerald-700 bg-white'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                ? 'border-emerald-500 text-emerald-700 dark:text-emerald-400 bg-white dark:bg-gray-900'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-800'
             }`}
           >
             {file.name}
@@ -51,7 +51,7 @@ export default function SourceFileTabs({ files, onQuote }: Props) {
       </div>
       <div>
         {loading[activeTab] ? (
-          <div className="text-center py-8 text-gray-500 text-sm">Loading...</div>
+          <div className="text-center py-8 text-gray-500 dark:text-gray-400 text-sm">Loading...</div>
         ) : contents[activeTab] ? (
           <ReadOnlyCodeViewer
             value={contents[activeTab]}
@@ -59,7 +59,7 @@ export default function SourceFileTabs({ files, onQuote }: Props) {
             onQuote={onQuote ? (text, startLine, endLine) => onQuote(activeTab, text, startLine, endLine) : undefined}
           />
         ) : (
-          <div className="text-center py-8 text-gray-500 text-sm">
+          <div className="text-center py-8 text-gray-500 dark:text-gray-400 text-sm">
             Select a file to view its contents.
           </div>
         )}

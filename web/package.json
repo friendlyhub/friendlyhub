@@ -20,6 +20,7 @@
     "react-dom": "^19.2.0",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.1",
+    "simple-icons": "^16.11.0",
     "spdx-license-list": "^6.11.0",
     "yaml": "^2.8.2"
   },

@@ -15,6 +15,8 @@ import Users from './pages/Users';
 import InstallApp from './pages/InstallApp';
 import VerifyApp from './pages/VerifyApp';
 import AuthCallback from './pages/AuthCallback';
+import Setup from './pages/Setup';
+import SetupDistro from './pages/SetupDistro';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -62,6 +64,8 @@ function AppRoutes() {
         <Route path="/apps/:appId" element={<AppDetail />} />
         <Route path="/apps/:appId/install" element={<InstallApp />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/setup" element={<Setup />} />
+        <Route path="/setup/:slug" element={<SetupDistro />} />
         <Route
           path="/my/apps"
           element={

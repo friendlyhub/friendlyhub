@@ -81,7 +81,7 @@ const actions: Array<{
 
 export default function MarkdownToolbar({ textareaRef, value, onChange }: MarkdownToolbarProps) {
   return (
-    <div className="flex items-center gap-0.5 px-1 py-1 bg-gray-50 border border-gray-300 border-b-0 rounded-t-lg">
+    <div className="flex items-center gap-0.5 px-1 py-1 bg-gray-50 dark:bg-gray-950 border border-gray-300 dark:border-gray-700 border-b-0 rounded-t-lg">
       {actions.map(({ label, icon: Icon, action }) => (
         <button
           key={label}
@@ -92,7 +92,7 @@ export default function MarkdownToolbar({ textareaRef, value, onChange }: Markdo
               applyAction(textareaRef.current, value, action, onChange);
             }
           }}
-          className="p-1.5 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+          className="p-1.5 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-800 transition-colors"
         >
           <Icon className="w-3.5 h-3.5" />
         </button>

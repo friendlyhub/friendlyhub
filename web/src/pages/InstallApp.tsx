@@ -21,7 +21,7 @@ export default function InstallApp() {
     window.location.href = flatpakInstallUrl(appId);
   }, [appId]);
 
-  if (isLoading) return <div className="text-center py-12 text-gray-500">Loading...</div>;
+  if (isLoading) return <div className="text-center py-12 text-gray-500 dark:text-gray-400">Loading...</div>;
 
   const displayName = app?.name || appId || 'App';
 
@@ -32,46 +32,46 @@ export default function InstallApp() {
         {app?.icon_url ? (
           <img src={app.icon_url} alt="" className="w-16 h-16 rounded-xl" />
         ) : (
-          <div className="w-16 h-16 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 font-bold text-xl">
+          <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-950 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold text-xl">
             {displayName.charAt(0)}
           </div>
         )}
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Installing {displayName}</h1>
-          {app?.summary && <p className="text-gray-500 text-sm">{app.summary}</p>}
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Installing {displayName}</h1>
+          {app?.summary && <p className="text-gray-500 dark:text-gray-400 text-sm">{app.summary}</p>}
         </div>
       </div>
 
       {/* Status */}
-      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 mb-8">
+      <div className="bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 rounded-xl p-6 mb-8">
         <div className="flex items-center gap-3 mb-2">
-          <Download size={24} className="text-emerald-600" />
-          <h2 className="text-lg font-semibold text-emerald-800">Opening your software manager...</h2>
+          <Download size={24} className="text-emerald-600 dark:text-emerald-400" />
+          <h2 className="text-lg font-semibold text-emerald-800 dark:text-emerald-300">Opening your software manager...</h2>
         </div>
-        <p className="text-emerald-700 text-sm">
+        <p className="text-emerald-700 dark:text-emerald-400 text-sm">
           {displayName} should now be opening in your software manager
           (e.g. GNOME Software, KDE Discover).
         </p>
-        <p className="text-emerald-700 text-sm mt-2">
+        <p className="text-emerald-700 dark:text-emerald-400 text-sm mt-2">
           If nothing happened, try the options below.
         </p>
       </div>
 
       {/* Fallback instructions */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
           Having trouble? Here's what you can do:
         </h2>
 
         <div className="space-y-6">
           {/* Option 1: Direct download */}
           <div>
-            <h3 className="font-medium text-gray-900 mb-2">1. Download the .flatpakref</h3>
-            <p className="text-sm text-gray-600">
+            <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-2">1. Download the .flatpakref</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
               <a
                 href={flatpakrefUrl(appId!)}
                 download={`${appId}.flatpakref`}
-                className="text-emerald-600 hover:underline font-medium"
+                className="text-emerald-600 dark:text-emerald-400 hover:underline font-medium"
               >
                 Download the .flatpakref file
               </a>
@@ -81,8 +81,8 @@ export default function InstallApp() {
 
           {/* Option 2: Manual install */}
           <div>
-            <h3 className="font-medium text-gray-900 mb-2">2. Manual Install</h3>
-            <p className="text-sm text-gray-600 mb-3">
+            <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-2">2. Manual Install</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
               You can install {displayName} via the command line:
             </p>
             <div className="space-y-2">
@@ -97,14 +97,14 @@ export default function InstallApp() {
 
           {/* Option 3: Troubleshooting */}
           <div>
-            <h3 className="font-medium text-gray-900 mb-2">3. Troubleshooting</h3>
-            <p className="text-sm text-gray-600">
+            <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-2">3. Troubleshooting</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
               If that still doesn't work, make sure you have Flatpak installed.{' '}
               <a
                 href="https://flatpak.org/setup/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-emerald-600 hover:underline inline-flex items-center gap-1"
+                className="text-emerald-600 dark:text-emerald-400 hover:underline inline-flex items-center gap-1"
               >
                 See the setup guide
                 <ExternalLink size={12} />
@@ -114,10 +114,10 @@ export default function InstallApp() {
         </div>
 
         {/* Back link */}
-        <div className="mt-6 pt-4 border-t border-gray-200">
+        <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-800">
           <Link
             to={`/apps/${appId}`}
-            className="text-sm text-emerald-600 hover:underline"
+            className="text-sm text-emerald-600 dark:text-emerald-400 hover:underline"
           >
             Back to {displayName}
           </Link>

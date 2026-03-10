@@ -94,8 +94,8 @@ export default function BuildProgress({ appId, runId, runUrl, isBuilding }: Prop
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <div className="flex items-center gap-2 text-sm text-gray-500">
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
+        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
           <Loader2 className="w-4 h-4 animate-spin" />
           Loading build progress...
         </div>
@@ -115,7 +115,7 @@ export default function BuildProgress({ appId, runId, runUrl, isBuilding }: Prop
       runUrl ? (
         <a
           href={runUrl}
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
+          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
@@ -130,7 +130,7 @@ export default function BuildProgress({ appId, runId, runUrl, isBuilding }: Prop
           <div key={job.id}>
             <div className="flex items-center gap-2 mb-3">
               <StepIcon status={job.status} conclusion={job.conclusion} />
-              <span className="font-medium text-sm text-gray-900">{job.name}</span>
+              <span className="font-medium text-sm text-gray-900 dark:text-gray-100">{job.name}</span>
               {job.started_at && (
                 <span className="text-xs text-gray-400 ml-auto">
                   {formatDuration(job.started_at, job.completed_at)}
@@ -144,7 +144,7 @@ export default function BuildProgress({ appId, runId, runUrl, isBuilding }: Prop
                   <div key={i} className="flex items-center gap-2">
                     <StepIcon status={step.status} conclusion={step.conclusion} />
                     <span className={`text-sm ${
-                      step.status === 'in_progress' ? 'text-blue-700 font-medium' : 'text-gray-600'
+                      step.status === 'in_progress' ? 'text-blue-700 dark:text-blue-400 font-medium' : 'text-gray-600 dark:text-gray-400'
                     }`}>
                       {step.name}
                     </span>
