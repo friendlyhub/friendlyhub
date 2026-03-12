@@ -49,6 +49,10 @@ pub struct MetainfoValidation {
     pub data: MetainfoData,
 }
 
+pub fn latest_version(data: &MetainfoData) -> Option<&str> {
+    data.releases.first().map(|r| r.version.as_str())
+}
+
 pub fn parse_and_validate(xml: &str) -> MetainfoValidation {
     let mut errors = Vec::new();
     let mut warnings = Vec::new();

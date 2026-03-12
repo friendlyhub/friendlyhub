@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Copy, Check, Search, Download } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Copy, Check, Search, Download, BookOpen } from 'lucide-react';
 import {
   siUbuntu, siFedora, siDebian, siArchlinux, siLinuxmint, siOpensuse,
   siManjaro, siPopos, siZorin, siElementary, siSolus, siVoidlinux,
@@ -9,6 +9,7 @@ import {
 } from 'simple-icons';
 import { listApps } from '../api/client';
 import AppCard from '../components/AppCard';
+import { useThemeStore } from '../stores/theme';
 
 function isColorDark(hex: string): boolean {
   const c = hex.replace('#', '');
@@ -56,6 +57,7 @@ const SLIDES = [
 const INTERVAL = 7000;
 
 export default function Home() {
+  const themeResolved = useThemeStore((s) => s.resolved);
   const [current, setCurrent] = useState(0);
   const [progress, setProgress] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -277,7 +279,7 @@ export default function Home() {
       {/* App Carousel */}
       {featuredApps.length > 0 && (() => {
         const app = featuredApps[appSlide];
-        const bgColor = app.branding?.light_color ?? '#f3f4f6';
+        const bgColor = (themeResolved === 'dark' ? app.branding?.dark_color : app.branding?.light_color) ?? '#f3f4f6';
         const defaultScreenshot = app.screenshots.find((s) => s.is_default) ?? app.screenshots[0];
         const isDark = isColorDark(bgColor);
         return (
@@ -362,8 +364,23 @@ export default function Home() {
       {/* Manifesto + Setup */}
       <section className="mx-2 sm:mx-4 md:mx-6 lg:mx-8 xl:mx-12 2xl:mx-auto 2xl:max-w-351.25 py-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-linear-to-br from-amber-400 to-yellow-500 rounded-2xl p-8 flex items-center justify-center text-amber-900 font-semibold text-lg shadow-lg">
-            Manifesto goes here
+          <div className="grid grid-cols-2 gap-6">
+            <Link
+              to="/manifesto"
+              className="bg-linear-to-br from-amber-400 to-yellow-500 rounded-2xl p-6 flex flex-col items-center justify-center text-amber-900 shadow-lg hover:from-amber-500 hover:to-yellow-600 transition-all cursor-pointer group"
+            >
+              <img src="/images/friendly_manifesto.svg" alt="Friendly Manifesto" className="w-28 h-28 mb-3" />
+              <span className="font-semibold text-base text-center leading-tight">We follow the Friendly Manifesto</span>
+              <span className="text-sm text-amber-800/70 mt-2 group-hover:underline">Find out how &rarr;</span>
+            </Link>
+            <a
+              href="/docs/"
+              className="bg-linear-to-br from-emerald-500 to-teal-600 rounded-2xl p-6 flex flex-col items-center justify-center text-white shadow-lg hover:from-emerald-600 hover:to-teal-700 transition-all group"
+            >
+              <BookOpen className="w-28 h-28 mb-3 stroke-1" />
+              <span className="font-semibold text-base text-center leading-tight">Documentation</span>
+              <span className="text-sm text-white/70 mt-2 text-center group-hover:underline">Guides for users and developers &rarr;</span>
+            </a>
           </div>
           <div className="bg-gray-900 rounded-2xl p-8 text-white shadow-lg">
             <h2 className="text-lg font-semibold mb-3">Add FriendlyHub to your system</h2>

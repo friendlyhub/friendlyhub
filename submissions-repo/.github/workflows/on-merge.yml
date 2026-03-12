@@ -1,0 +1,149 @@
+# FriendlyHub Submissions — Process Merged Submission
+# When a PR is merged, creates the app + submission in FriendlyHub and triggers a build.
+
+name: Process Submission
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  submit:
+    name: Submit to FriendlyHub
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect changed app directory
+        id: detect
+        run: |
+          # Find directories changed in the merge commit
+          CHANGED_DIRS=$(git diff --name-only HEAD~1...HEAD | grep '/' | cut -d'/' -f1 | sort -u)
+          DIR_COUNT=$(echo "${CHANGED_DIRS}" | grep -c . || true)
+
+          if [ "${DIR_COUNT}" -eq 0 ]; then
+            echo "No app directories changed, skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Process the first changed directory (PRs should only contain one)
+          APP_DIR=$(echo "${CHANGED_DIRS}" | head -1)
+
+          # Find manifest
+          MANIFEST=""
+          for f in "${APP_DIR}"/*.json "${APP_DIR}"/*.yaml "${APP_DIR}"/*.yml; do
+            if [ -f "$f" ] && grep -qE '"app-id"|"id"|app-id:' "$f" 2>/dev/null; then
+              MANIFEST="$f"
+              break
+            fi
+          done
+
+          if [ -z "${MANIFEST}" ]; then
+            echo "::error::No manifest found in ${APP_DIR}/"
+            exit 1
+          fi
+
+          METAINFO="${APP_DIR}/${APP_DIR}.metainfo.xml"
+          if [ ! -f "${METAINFO}" ]; then
+            echo "::error::Missing metainfo: ${METAINFO}"
+            exit 1
+          fi
+
+          echo "app_dir=${APP_DIR}" >> "$GITHUB_OUTPUT"
+          echo "manifest=${MANIFEST}" >> "$GITHUB_OUTPUT"
+          echo "metainfo=${METAINFO}" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Determine PR author
+        id: author
+        if: steps.detect.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Find the PR that was merged for this commit
+          PR_DATA=$(gh pr list --state merged --search "${{ github.sha }}" --json author --limit 1)
+          AUTHOR=$(echo "${PR_DATA}" | jq -r '.[0].author.login // empty')
+
+          if [ -z "${AUTHOR}" ]; then
+            # Fall back to commit author
+            AUTHOR=$(git log -1 --format='%an' HEAD)
+            echo "::warning::Could not determine PR author, using commit author: ${AUTHOR}"
+          fi
+
+          echo "github_username=${AUTHOR}" >> "$GITHUB_OUTPUT"
+          echo "PR author: ${AUTHOR}"
+
+      - name: Submit to FriendlyHub
+        if: steps.detect.outputs.skip != 'true'
+        env:
+          FRIENDLYHUB_API_URL: ${{ secrets.FRIENDLYHUB_API_URL }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+        run: |
+          APP_DIR="${{ steps.detect.outputs.app_dir }}"
+          MANIFEST="${{ steps.detect.outputs.manifest }}"
+          METAINFO="${{ steps.detect.outputs.metainfo }}"
+          GITHUB_USERNAME="${{ steps.author.outputs.github_username }}"
+
+          # Convert manifest to JSON if needed
+          if [[ "${MANIFEST}" == *.yaml ]] || [[ "${MANIFEST}" == *.yml ]]; then
+            sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+            sudo chmod +x /usr/local/bin/yq
+            MANIFEST_JSON=$(yq -o=json '.' "${MANIFEST}")
+          else
+            MANIFEST_JSON=$(cat "${MANIFEST}")
+          fi
+
+          # Read metainfo
+          METAINFO_ESCAPED=$(jq -Rs '.' "${METAINFO}")
+
+          # Collect companion source files (JSON files that aren't the manifest)
+          SOURCE_FILES="{}"
+          for f in "${APP_DIR}"/*.json; do
+            if [ -f "$f" ] && [ "$f" != "${MANIFEST}" ]; then
+              BASENAME=$(basename "$f")
+              CONTENT=$(jq -Rs '.' "$f")
+              SOURCE_FILES=$(echo "${SOURCE_FILES}" | jq --arg k "${BASENAME}" --argjson v "${CONTENT}" '. + {($k): $v}')
+            fi
+          done
+
+          # Call pr-submit endpoint
+          PAYLOAD=$(jq -n \
+            --arg app_id "${APP_DIR}" \
+            --argjson manifest "${MANIFEST_JSON}" \
+            --argjson metainfo "${METAINFO_ESCAPED}" \
+            --arg github_username "${GITHUB_USERNAME}" \
+            --argjson source_files "${SOURCE_FILES}" \
+            '{
+              app_id: $app_id,
+              manifest: $manifest,
+              metainfo: $metainfo,
+              github_username: $github_username,
+              source_files: $source_files
+            }')
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${FRIENDLYHUB_API_URL}/api/v1/webhooks/pr-submit" \
+            -H "Content-Type: application/json" \
+            -H "x-webhook-secret: ${WEBHOOK_SECRET}" \
+            -d "${PAYLOAD}")
+
+          HTTP_CODE=$(echo "${RESPONSE}" | tail -1)
+          BODY=$(echo "${RESPONSE}" | sed '$d')
+
+          echo "Submission response (${HTTP_CODE}):"
+          echo "${BODY}" | jq . 2>/dev/null || echo "${BODY}"
+
+          if [ "${HTTP_CODE}" != "200" ] && [ "${HTTP_CODE}" != "201" ]; then
+            echo "::error::Failed to create submission"
+            exit 1
+          fi
+
+          SUBMISSION_ID=$(echo "${BODY}" | jq -r '.id')
+          VERSION=$(echo "${BODY}" | jq -r '.version')
+          echo "Submission created: ${SUBMISSION_ID} (v${VERSION})"
+          echo "Build has been triggered."

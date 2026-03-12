@@ -386,7 +386,7 @@ export default function SubmitVersion() {
           <div
             className={`lg:block ${mobileView === 'editor' ? 'w-full' : 'hidden'} flex-1 min-w-0`}
           >
-            <div className="lg:sticky lg:top-0 h-[calc(100vh-8rem)]">
+            <div className="lg:sticky lg:top-0 min-h-[calc(100vh-8rem)] h-full">
               <ManifestEditor
                 value={editorText}
                 format={editorFormat}
@@ -428,7 +428,7 @@ export default function SubmitVersion() {
           <div
             className={`lg:block ${mobileView === 'editor' ? 'w-full' : 'hidden'} flex-1 min-w-0`}
           >
-            <div className="lg:sticky lg:top-0 h-[calc(100vh-8rem)]">
+            <div className="lg:sticky lg:top-0 min-h-[calc(100vh-8rem)] h-full">
               <MetainfoEditor
                 value={metainfoText}
                 onChange={handleMetainfoEditorChange}

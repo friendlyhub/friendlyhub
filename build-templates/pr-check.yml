@@ -119,22 +119,17 @@ jobs:
       - name: Detect manifest and app-id
         id: detect
         run: |
+          # Find the manifest file
           for f in *.json *.yaml *.yml; do
             if [ -f "$f" ] && grep -qE '"app-id"|"id"|app-id:' "$f" 2>/dev/null; then
-              echo "manifest=$f" >> "$GITHUB_OUTPUT"
+              MANIFEST="$f"
               break
             fi
           done
 
-          MANIFEST="${{ steps.detect.outputs.manifest || '' }}"
           if [ -z "${MANIFEST}" ]; then
-            # Re-check with the found file
-            for f in *.json *.yaml *.yml; do
-              if [ -f "$f" ] && grep -qE '"app-id"|"id"|app-id:' "$f" 2>/dev/null; then
-                MANIFEST="$f"
-                break
-              fi
-            done
+            echo "::error::No Flatpak manifest found in repository root"
+            exit 1
           fi
 
           # Extract app-id
@@ -143,8 +138,20 @@ jobs:
             APP_ID=$(grep -E '^(app-id|id):' "${MANIFEST}" | head -1 | sed 's/^[^:]*: *//' | tr -d '"' | tr -d "'")
           fi
 
-          # Extract version from the commit message or manifest
-          VERSION=$(echo "${{ github.event.head_commit.message }}" | grep -oP 'v?\d+\.\d+[\.\d]*' | head -1 || true)
+          # Find metainfo file
+          METAINFO_FILE="${APP_ID}.metainfo.xml"
+          if [ ! -f "${METAINFO_FILE}" ]; then
+            METAINFO_FILE=""
+          fi
+
+          # Extract version from metainfo releases, fall back to commit message
+          VERSION=""
+          if [ -n "${METAINFO_FILE}" ]; then
+            VERSION=$(grep -oP '<release\s+version="\K[^"]+' "${METAINFO_FILE}" | head -1 || true)
+          fi
+          if [ -z "${VERSION}" ]; then
+            VERSION=$(echo "${{ github.event.head_commit.message }}" | grep -oP 'v?\d+\.\d+[\.\d]*' | head -1 || true)
+          fi
           if [ -z "${VERSION}" ]; then
             VERSION="0.0.0-$(echo ${{ github.sha }} | cut -c1-7)"
           fi
@@ -152,6 +159,7 @@ jobs:
           echo "manifest=${MANIFEST}" >> "$GITHUB_OUTPUT"
           echo "app_id=${APP_ID}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "metainfo_file=${METAINFO_FILE}" >> "$GITHUB_OUTPUT"
 
       - name: Create submission
         id: submit
@@ -162,6 +170,7 @@ jobs:
           MANIFEST="${{ steps.detect.outputs.manifest }}"
           APP_ID="${{ steps.detect.outputs.app_id }}"
           VERSION="${{ steps.detect.outputs.version }}"
+          METAINFO_FILE="${{ steps.detect.outputs.metainfo_file }}"
 
           # Convert manifest to JSON if needed
           if [[ "${MANIFEST}" == *.yaml ]] || [[ "${MANIFEST}" == *.yml ]]; then
@@ -170,6 +179,13 @@ jobs:
             MANIFEST_JSON=$(yq -o=json '.' "${MANIFEST}")
           else
             MANIFEST_JSON=$(cat "${MANIFEST}")
+          fi
+
+          # Read metainfo if available
+          METAINFO_FIELD=""
+          if [ -n "${METAINFO_FILE}" ]; then
+            METAINFO_ESCAPED=$(jq -Rs '.' "${METAINFO_FILE}")
+            METAINFO_FIELD=", \"metainfo\": ${METAINFO_ESCAPED}"
           fi
 
           # Create the submission via webhook-authenticated endpoint
@@ -181,7 +197,7 @@ jobs:
               \"app_id\": \"${APP_ID}\",
               \"version\": \"${VERSION}\",
               \"manifest\": ${MANIFEST_JSON},
-              \"source_ref\": \"${{ github.sha }}\"
+              \"source_ref\": \"${{ github.sha }}\"${METAINFO_FIELD}
             }")
 
           HTTP_CODE=$(echo "${RESPONSE}" | tail -1)

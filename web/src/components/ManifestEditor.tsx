@@ -5,6 +5,7 @@ import { configureMonacoYaml } from 'monaco-yaml';
 import YAML from 'yaml';
 import { Upload } from 'lucide-react';
 import flatpakSchema from '../data/flatpak-manifest.schema.json';
+import { useThemeStore } from '../stores/theme';
 
 const SCHEMA_URI = 'https://friendlyhub.org/schemas/flatpak-manifest.json';
 
@@ -96,6 +97,11 @@ export default function ManifestEditor({
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [converting, setConverting] = useState(false);
+  const resolved = useThemeStore((s) => s.resolved);
+
+  useEffect(() => {
+    monaco.editor.setTheme(resolved === 'dark' ? 'vs-dark' : 'vs-light');
+  }, [resolved]);
   const onChangeRef = useRef(onChange);
   const formatRef = useRef(format);
   const suppressSyncRef = useRef(false);
@@ -111,7 +117,7 @@ export default function ManifestEditor({
 
     const ed = monaco.editor.create(containerRef.current, {
       model,
-      theme: 'vs-light',
+      theme: useThemeStore.getState().resolved === 'dark' ? 'vs-dark' : 'vs-light',
       minimap: { enabled: false },
       fontSize: 13,
       lineNumbers: 'on',

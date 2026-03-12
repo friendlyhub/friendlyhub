@@ -112,7 +112,7 @@ async fn submit(
     .await?;
 
     // Push manifest to the app's GitHub repo and trigger a build
-    trigger_build(&state, &app.app_id, sub.id, &input.manifest, &input.metainfo, &input.source_files).await?;
+    ensure_repo_and_build(&state, &app.app_id, sub.id, app.owner_id, &input.manifest, &input.metainfo, &input.source_files).await?;
 
     Ok(Json(serde_json::json!({
         "id": sub.id,
@@ -238,17 +238,18 @@ async fn source_files(
     Ok(Json(serde_json::json!(filtered)))
 }
 
-/// Push the manifest to the app's GitHub repo and trigger a GHA build.
-async fn trigger_build(
+/// Create/update the app's GitHub repo, push files + workflows, add collaborator,
+/// and trigger a GHA build. Used by both web submissions and PR-based submissions.
+pub async fn ensure_repo_and_build(
     state: &AppState,
     app_id: &str,
     submission_id: Uuid,
+    owner_id: Uuid,
     manifest: &Value,
     metainfo: &str,
     source_files: &HashMap<String, String>,
 ) -> Result<(), AppError> {
-    // Ensure the repo exists in the org
-    let repo = app_id; // repo name = app_id (e.g. org.example.MyApp)
+    let repo = app_id;
     if !state.github.repo_exists(repo).await? {
         state
             .github
@@ -256,7 +257,13 @@ async fn trigger_build(
             .await?;
     }
 
-    // Push the manifest as the main manifest file
+    // Add the app owner as a triage collaborator (best-effort)
+    if let Ok(Some(owner)) = user::find_by_id(&state.db, owner_id).await {
+        if let Err(e) = state.github.add_collaborator(repo, &owner.github_login, "triage").await {
+            tracing::warn!(repo = repo, user = %owner.github_login, error = %e, "Failed to add collaborator");
+        }
+    }
+
     let manifest_str = serde_json::to_string_pretty(manifest)
         .map_err(|e| AppError::Internal(format!("Failed to serialize manifest: {e}")))?;
     state
@@ -269,7 +276,6 @@ async fn trigger_build(
         )
         .await?;
 
-    // Push the metainfo XML
     state
         .github
         .put_file(
@@ -280,9 +286,7 @@ async fn trigger_build(
         )
         .await?;
 
-    // Push companion source files (e.g. cargo-sources.json, node-sources.json)
     for (filename, content) in source_files {
-        // Only allow JSON files in the repo root — no path traversal
         let safe_name = std::path::Path::new(filename)
             .file_name()
             .and_then(|n| n.to_str())
@@ -298,7 +302,6 @@ async fn trigger_build(
             .await?;
     }
 
-    // Push the GHA workflows if they don't exist yet
     state
         .github
         .put_file(
@@ -318,7 +321,6 @@ async fn trigger_build(
         )
         .await?;
 
-    // Trigger the workflow
     let inputs = serde_json::json!({
         "submission_id": submission_id.to_string(),
         "app_id": app_id,
@@ -329,10 +331,8 @@ async fn trigger_build(
         .trigger_build(repo, "build.yml", "main", &inputs)
         .await?;
 
-    // Update submission status to building
     submission::update_status(&state.db, submission_id, "building").await?;
 
-    // Try to find the run ID (best-effort, it may not be available immediately)
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     if let Some(run) = state.github.find_latest_run(repo, "build.yml").await? {
         submission::set_build_info(&state.db, submission_id, run.id, &run.html_url).await?;

@@ -22,9 +22,11 @@ deploy-dev: build-lambda
 deploy-prod: build-lambda
     cd infra && serverless deploy --stage prod
 
-# Build and deploy the frontend SPA to S3 (prod)
+# Build and deploy the frontend SPA + docs to S3 (prod)
 deploy-web:
     cd web && npm run build
+    cd docs && npm run build
+    cp -r docs/.vitepress/dist/ web/dist/docs/
     aws s3 sync web/dist/ s3://friendlyhub-prod-spabucket-gbz4esxpwx5u --delete --region {{region}}
     aws cloudfront create-invalidation --distribution-id {{cf_spa}} --paths "/*" --region {{region}}
 
@@ -41,6 +43,10 @@ run-dev:
 # Run frontend dev server against prod API
 run-local-against-prod:
     cd web && API_URL={{prod_api}} npm run dev
+
+# Run the docs dev server
+run-docs:
+    cd docs && npm run dev
 
 # Run server tests
 test-server:

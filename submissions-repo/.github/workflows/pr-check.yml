@@ -1,0 +1,256 @@
+# FriendlyHub Submissions — PR Validation
+# Validates manifest + metainfo when a PR is opened or updated.
+
+name: Validate Submission
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Detect changed app directory
+        id: detect
+        run: |
+          # Find directories changed in this PR
+          CHANGED_DIRS=$(git diff --name-only origin/main...HEAD | grep '/' | cut -d'/' -f1 | sort -u)
+          DIR_COUNT=$(echo "${CHANGED_DIRS}" | grep -c . || true)
+
+          if [ "${DIR_COUNT}" -eq 0 ]; then
+            echo "::error::No app directory found in changed files"
+            exit 1
+          fi
+
+          if [ "${DIR_COUNT}" -gt 1 ]; then
+            echo "::error::PR must only modify a single app directory. Found: ${CHANGED_DIRS}"
+            exit 1
+          fi
+
+          APP_DIR="${CHANGED_DIRS}"
+
+          # Validate reverse-DNS format
+          if ! echo "${APP_DIR}" | grep -qE '^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*){2,}$'; then
+            echo "::error::Directory '${APP_DIR}' is not a valid reverse-DNS app ID"
+            exit 1
+          fi
+
+          # Find manifest
+          MANIFEST=""
+          for f in "${APP_DIR}"/*.json "${APP_DIR}"/*.yaml "${APP_DIR}"/*.yml; do
+            if [ -f "$f" ] && grep -qE '"app-id"|"id"|app-id:' "$f" 2>/dev/null; then
+              MANIFEST="$f"
+              break
+            fi
+          done
+
+          if [ -z "${MANIFEST}" ]; then
+            echo "::error::No Flatpak manifest found in ${APP_DIR}/"
+            exit 1
+          fi
+
+          # Find metainfo
+          METAINFO="${APP_DIR}/${APP_DIR}.metainfo.xml"
+          if [ ! -f "${METAINFO}" ]; then
+            echo "::error::Missing metainfo file: ${METAINFO}"
+            exit 1
+          fi
+
+          echo "app_dir=${APP_DIR}" >> "$GITHUB_OUTPUT"
+          echo "manifest=${MANIFEST}" >> "$GITHUB_OUTPUT"
+          echo "metainfo=${METAINFO}" >> "$GITHUB_OUTPUT"
+          echo "Detected app: ${APP_DIR}"
+          echo "  Manifest: ${MANIFEST}"
+          echo "  Metainfo: ${METAINFO}"
+
+      - name: Validate manifest
+        env:
+          FRIENDLYHUB_API_URL: ${{ secrets.FRIENDLYHUB_API_URL }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+        run: |
+          MANIFEST="${{ steps.detect.outputs.manifest }}"
+
+          if [[ "${MANIFEST}" == *.yaml ]] || [[ "${MANIFEST}" == *.yml ]]; then
+            sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+            sudo chmod +x /usr/local/bin/yq
+            MANIFEST_JSON=$(yq -o=json '.' "${MANIFEST}")
+          else
+            MANIFEST_JSON=$(cat "${MANIFEST}")
+          fi
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${FRIENDLYHUB_API_URL}/api/v1/manifests/validate" \
+            -H "Content-Type: application/json" \
+            -H "x-webhook-secret: ${WEBHOOK_SECRET}" \
+            -d "${MANIFEST_JSON}")
+
+          HTTP_CODE=$(echo "${RESPONSE}" | tail -1)
+          BODY=$(echo "${RESPONSE}" | sed '$d')
+
+          echo "Manifest validation (${HTTP_CODE}):"
+          echo "${BODY}" | jq . 2>/dev/null || echo "${BODY}"
+
+          if [ "${HTTP_CODE}" != "200" ]; then
+            echo "::error::Manifest validation request failed"
+            exit 1
+          fi
+
+          VALID=$(echo "${BODY}" | jq -r '.valid')
+          if [ "${VALID}" != "true" ]; then
+            echo "${BODY}" | jq -r '.errors[]' | while read -r err; do
+              echo "::error::${err}"
+            done
+            exit 1
+          fi
+
+          echo "${BODY}" | jq -r '.warnings[]' 2>/dev/null | while read -r warn; do
+            echo "::warning::${warn}"
+          done
+
+      - name: Validate metainfo
+        env:
+          FRIENDLYHUB_API_URL: ${{ secrets.FRIENDLYHUB_API_URL }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+        run: |
+          METAINFO="${{ steps.detect.outputs.metainfo }}"
+          METAINFO_CONTENT=$(jq -Rs '.' "${METAINFO}")
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${FRIENDLYHUB_API_URL}/api/v1/webhooks/validate-metainfo" \
+            -H "Content-Type: application/json" \
+            -H "x-webhook-secret: ${WEBHOOK_SECRET}" \
+            -d "{\"metainfo\": ${METAINFO_CONTENT}}")
+
+          HTTP_CODE=$(echo "${RESPONSE}" | tail -1)
+          BODY=$(echo "${RESPONSE}" | sed '$d')
+
+          echo "Metainfo validation (${HTTP_CODE}):"
+          echo "${BODY}" | jq . 2>/dev/null || echo "${BODY}"
+
+          if [ "${HTTP_CODE}" != "200" ]; then
+            echo "::error::Metainfo validation request failed"
+            exit 1
+          fi
+
+          VALID=$(echo "${BODY}" | jq -r '.valid')
+          if [ "${VALID}" != "true" ]; then
+            echo "${BODY}" | jq -r '.errors[]' | while read -r err; do
+              echo "::error::${err}"
+            done
+            exit 1
+          fi
+
+          VERSION=$(echo "${BODY}" | jq -r '.version // empty')
+          if [ -z "${VERSION}" ]; then
+            echo "::error::Metainfo must contain at least one <release> with a version"
+            exit 1
+          fi
+
+          echo "${BODY}" | jq -r '.warnings[]' 2>/dev/null | while read -r warn; do
+            echo "::warning::${warn}"
+          done
+
+          APP_ID=$(echo "${BODY}" | jq -r '.app_id // empty')
+          echo ""
+          echo "App ID: ${APP_ID}"
+          echo "Version: ${VERSION}"
+          echo "Validation passed."
+
+      - name: Check domain verification
+        id: verification
+        env:
+          FRIENDLYHUB_API_URL: ${{ secrets.FRIENDLYHUB_API_URL }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+        run: |
+          APP_DIR="${{ steps.detect.outputs.app_dir }}"
+          PR_AUTHOR="${{ github.event.pull_request.user.login }}"
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${FRIENDLYHUB_API_URL}/api/v1/webhooks/check-verification" \
+            -H "Content-Type: application/json" \
+            -H "x-webhook-secret: ${WEBHOOK_SECRET}" \
+            -d "{\"app_id\": \"${APP_DIR}\", \"github_username\": \"${PR_AUTHOR}\"}")
+
+          HTTP_CODE=$(echo "${RESPONSE}" | tail -1)
+          BODY=$(echo "${RESPONSE}" | sed '$d')
+
+          echo "Verification check (${HTTP_CODE}):"
+          echo "${BODY}" | jq . 2>/dev/null || echo "${BODY}"
+
+          if [ "${HTTP_CODE}" != "200" ]; then
+            echo "::warning::Verification check failed (non-blocking)"
+            echo "verified=unknown" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          VERIFIED=$(echo "${BODY}" | jq -r '.verified')
+          echo "verified=${VERIFIED}" >> "$GITHUB_OUTPUT"
+
+          if [ "${VERIFIED}" = "false" ]; then
+            DOMAIN=$(echo "${BODY}" | jq -r '.domain // empty')
+            TOKEN=$(echo "${BODY}" | jq -r '.token // empty')
+            WELL_KNOWN_URL=$(echo "${BODY}" | jq -r '.well_known_url // empty')
+            echo "domain=${DOMAIN}" >> "$GITHUB_OUTPUT"
+            echo "token=${TOKEN}" >> "$GITHUB_OUTPUT"
+            echo "well_known_url=${WELL_KNOWN_URL}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment on PR if domain unverified
+        if: steps.verification.outputs.verified == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const domain = '${{ steps.verification.outputs.domain }}';
+            const token = '${{ steps.verification.outputs.token }}';
+            const wellKnownUrl = '${{ steps.verification.outputs.well_known_url }}';
+
+            const marker = '<!-- friendlyhub-verification -->';
+            const body = `${marker}
+            ### Domain verification required
+
+            Your app ID uses the domain **${domain}**, which has not been verified yet.
+
+            To verify ownership, create the following file on your web server:
+
+            **URL:** \`${wellKnownUrl}\`
+            **Contents:** add this token on its own line:
+            \`\`\`
+            ${token}
+            \`\`\`
+
+            Once the file is accessible, push a new commit to this PR (or re-run the checks) to verify automatically.
+
+            > Your app can still be merged without verification, but it will show as **unverified** on FriendlyHub until the domain is confirmed.`;
+
+            // Delete previous verification comments to avoid spam
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            for (const comment of comments.data) {
+              if (comment.body.includes(marker)) {
+                await github.rest.issues.deleteComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: comment.id,
+                });
+              }
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body,
+            });

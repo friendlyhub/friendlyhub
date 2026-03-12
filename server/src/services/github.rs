@@ -354,6 +354,75 @@ impl GitHubService {
             .map_err(|e| AppError::Internal(format!("Failed to parse GitHub response: {e}")))
     }
 
+    /// Look up a GitHub user by login name. Returns their numeric ID and profile info.
+    pub async fn get_user_by_login(&self, username: &str) -> Result<GitHubUser, AppError> {
+        let url = format!("https://api.github.com/users/{username}");
+
+        let resp = self
+            .client
+            .get(&url)
+            .header("User-Agent", "friendlyhub-api")
+            .header("Accept", "application/vnd.github+json")
+            .bearer_auth(&self.token)
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("GitHub API call failed: {e}")))?;
+
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            return Err(AppError::NotFound(format!("GitHub user '{username}' not found")));
+        }
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(AppError::Internal(format!(
+                "GitHub get user returned {status}: {body}"
+            )));
+        }
+
+        resp.json()
+            .await
+            .map_err(|e| AppError::Internal(format!("Failed to parse GitHub response: {e}")))
+    }
+
+    /// Add a user as a collaborator on an org repo.
+    pub async fn add_collaborator(
+        &self,
+        repo: &str,
+        username: &str,
+        permission: &str,
+    ) -> Result<(), AppError> {
+        let url = format!(
+            "https://api.github.com/repos/{}/{repo}/collaborators/{username}",
+            self.org
+        );
+
+        let body = serde_json::json!({
+            "permission": permission,
+        });
+
+        let resp = self
+            .client
+            .put(&url)
+            .header("User-Agent", "friendlyhub-api")
+            .header("Accept", "application/vnd.github+json")
+            .bearer_auth(&self.token)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("GitHub API call failed: {e}")))?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(AppError::Internal(format!(
+                "GitHub add collaborator returned {status}: {body}"
+            )));
+        }
+
+        Ok(())
+    }
+
     /// Check if a repository exists in the org.
     pub async fn repo_exists(&self, repo: &str) -> Result<bool, AppError> {
         let url = format!("https://api.github.com/repos/{}/{repo}", self.org);
@@ -397,4 +466,13 @@ struct GitHubContentItem {
 pub struct RepoFile {
     pub name: String,
     pub download_url: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GitHubUser {
+    pub id: i64,
+    pub login: String,
+    pub name: Option<String>,
+    pub email: Option<String>,
+    pub avatar_url: Option<String>,
 }

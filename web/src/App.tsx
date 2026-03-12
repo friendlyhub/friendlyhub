@@ -17,6 +17,7 @@ import VerifyApp from './pages/VerifyApp';
 import AuthCallback from './pages/AuthCallback';
 import Setup from './pages/Setup';
 import SetupDistro from './pages/SetupDistro';
+import Manifesto from './pages/Manifesto';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -66,6 +67,7 @@ function AppRoutes() {
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/setup" element={<Setup />} />
         <Route path="/setup/:slug" element={<SetupDistro />} />
+        <Route path="/manifesto" element={<Manifesto />} />
         <Route
           path="/my/apps"
           element={

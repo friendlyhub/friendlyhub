@@ -42,10 +42,10 @@ export default function Layout() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col">
       <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
-        <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <nav className="h-16 flex items-center justify-between mx-2 sm:mx-4 md:mx-6 lg:mx-8 xl:mx-12 2xl:mx-auto 2xl:max-w-351.25">
           <div className="flex items-center gap-8">
             <Link to="/" className="flex items-center gap-2 text-xl font-bold text-emerald-600">
-              <img src="/images/friendlyhub_black.svg" alt="" className="h-7 w-7 dark:invert" style={{ filter: 'invert(38%) sepia(93%) saturate(520%) hue-rotate(118deg) brightness(92%) contrast(96%)' }} />
+              <img src="/images/friendlyhub_logo.svg" alt="" className="h-7 w-7" />
               FriendlyHub
             </Link>
             <Link
@@ -166,7 +166,7 @@ export default function Layout() {
       )}
 
       <footer className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-8 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mx-2 sm:mx-4 md:mx-6 lg:mx-8 xl:mx-12 2xl:mx-auto 2xl:max-w-351.25">
           <div className="flex justify-between items-center text-sm text-gray-500 dark:text-gray-400">
             <p>FriendlyHub — A friendly Flatpak repository</p>
             <div className="flex gap-6">

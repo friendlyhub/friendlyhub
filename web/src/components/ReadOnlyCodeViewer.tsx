@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import * as monaco from 'monaco-editor';
 import { Quote } from 'lucide-react';
+import { useThemeStore } from '../stores/theme';
 
 // Reuse the same worker routing as ManifestEditor.
 // Setting MonacoEnvironment is idempotent -- safe if already set.
@@ -51,6 +52,11 @@ export default function ReadOnlyCodeViewer({
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const idRef = useRef(++idCounter);
   const [hasSelection, setHasSelection] = useState(false);
+  const resolved = useThemeStore((s) => s.resolved);
+
+  useEffect(() => {
+    monaco.editor.setTheme(resolved === 'dark' ? 'vs-dark' : 'vs-light');
+  }, [resolved]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -60,7 +66,7 @@ export default function ReadOnlyCodeViewer({
 
     const ed = monaco.editor.create(containerRef.current, {
       model,
-      theme: 'vs-light',
+      theme: useThemeStore.getState().resolved === 'dark' ? 'vs-dark' : 'vs-light',
       readOnly: true,
       minimap: { enabled: false },
       fontSize: 13,

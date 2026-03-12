@@ -1,6 +1,7 @@
 import { useRef, useCallback, useEffect } from 'react';
 import * as monaco from 'monaco-editor';
 import { Upload } from 'lucide-react';
+import { useThemeStore } from '../stores/theme';
 
 interface MetainfoEditorProps {
   value: string;
@@ -23,6 +24,11 @@ export default function MetainfoEditor({
   const onChangeRef = useRef(onChange);
   const suppressSyncRef = useRef(false);
   onChangeRef.current = onChange;
+  const resolved = useThemeStore((s) => s.resolved);
+
+  useEffect(() => {
+    monaco.editor.setTheme(resolved === 'dark' ? 'vs-dark' : 'vs-light');
+  }, [resolved]);
 
   // Create editor on mount
   useEffect(() => {
@@ -33,7 +39,7 @@ export default function MetainfoEditor({
 
     const ed = monaco.editor.create(containerRef.current, {
       model,
-      theme: 'vs-light',
+      theme: useThemeStore.getState().resolved === 'dark' ? 'vs-dark' : 'vs-light',
       minimap: { enabled: false },
       fontSize: 13,
       lineNumbers: 'on',
