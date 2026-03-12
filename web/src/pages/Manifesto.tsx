@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { CheckCircle2, ExternalLink } from 'lucide-react';
 
 interface PrincipleProps {

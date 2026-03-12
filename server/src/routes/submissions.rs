@@ -264,7 +264,27 @@ pub async fn ensure_repo_and_build(
         }
     }
 
-    let manifest_str = serde_json::to_string_pretty(manifest)
+    // Inject metainfo as a file source so flatpak-builder can find it
+    let mut manifest = manifest.clone();
+    let metainfo_filename = format!("{app_id}.metainfo.xml");
+    let metainfo_source = serde_json::json!({
+        "type": "file",
+        "path": metainfo_filename,
+    });
+    if let Some(modules) = manifest.get_mut("modules").and_then(|m| m.as_array_mut()) {
+        for module in modules.iter_mut() {
+            if let Some(sources) = module.get_mut("sources").and_then(|s| s.as_array_mut()) {
+                let already_has = sources.iter().any(|s| {
+                    s.get("path").and_then(|p| p.as_str()) == Some(&metainfo_filename)
+                });
+                if !already_has {
+                    sources.push(metainfo_source.clone());
+                }
+            }
+        }
+    }
+
+    let manifest_str = serde_json::to_string_pretty(&manifest)
         .map_err(|e| AppError::Internal(format!("Failed to serialize manifest: {e}")))?;
     state
         .github

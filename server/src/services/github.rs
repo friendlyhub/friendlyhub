@@ -191,26 +191,43 @@ impl GitHubService {
             "inputs": inputs,
         });
 
-        let resp = self
-            .client
-            .post(&url)
-            .header("User-Agent", "friendlyhub-api")
-            .header("Accept", "application/vnd.github+json")
-            .bearer_auth(&self.token)
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| AppError::Internal(format!("GitHub API call failed: {e}")))?;
+        // Retry on 404 — GitHub may not have indexed a newly-pushed workflow yet
+        let mut attempts = 0;
+        loop {
+            attempts += 1;
+            let resp = self
+                .client
+                .post(&url)
+                .header("User-Agent", "friendlyhub-api")
+                .header("Accept", "application/vnd.github+json")
+                .bearer_auth(&self.token)
+                .json(&body)
+                .send()
+                .await
+                .map_err(|e| AppError::Internal(format!("GitHub API call failed: {e}")))?;
 
-        if !resp.status().is_success() {
+            if resp.status().is_success() {
+                return Ok(());
+            }
+
             let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
+            let resp_body = resp.text().await.unwrap_or_default();
+
+            if status.as_u16() == 404 && attempts < 4 {
+                tracing::warn!(
+                    repo = repo,
+                    workflow = workflow_file,
+                    attempt = attempts,
+                    "Workflow dispatch got 404, retrying after delay"
+                );
+                tokio::time::sleep(std::time::Duration::from_secs(5 * attempts as u64)).await;
+                continue;
+            }
+
             return Err(AppError::Internal(format!(
-                "GitHub workflow dispatch returned {status}: {body}"
+                "GitHub workflow dispatch returned {status}: {resp_body}"
             )));
         }
-
-        Ok(())
     }
 
     /// List recent workflow runs to find the run triggered by our dispatch.
@@ -438,6 +455,44 @@ impl GitHubService {
             .map_err(|e| AppError::Internal(format!("GitHub API call failed: {e}")))?;
 
         Ok(resp.status().is_success())
+    }
+
+    /// Create an issue on a repo in the org.
+    pub async fn create_issue(
+        &self,
+        repo: &str,
+        title: &str,
+        body: &str,
+        labels: &[&str],
+    ) -> Result<(), AppError> {
+        let url = format!("https://api.github.com/repos/{}/{repo}/issues", self.org);
+
+        let payload = serde_json::json!({
+            "title": title,
+            "body": body,
+            "labels": labels,
+        });
+
+        let resp = self
+            .client
+            .post(&url)
+            .header("User-Agent", "friendlyhub-api")
+            .header("Accept", "application/vnd.github+json")
+            .bearer_auth(&self.token)
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("GitHub API call failed: {e}")))?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(AppError::Internal(format!(
+                "GitHub create issue returned {status}: {body}"
+            )));
+        }
+
+        Ok(())
     }
 }
 

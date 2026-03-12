@@ -22,7 +22,7 @@ jobs:
         id: detect
         run: |
           # Find directories changed in the merge commit
-          CHANGED_DIRS=$(git diff --name-only HEAD~1...HEAD | grep '/' | cut -d'/' -f1 | sort -u)
+          CHANGED_DIRS=$(git diff --name-only HEAD~1...HEAD | grep '/' | cut -d'/' -f1 | sort -u | grep -v '^\.')
           DIR_COUNT=$(echo "${CHANGED_DIRS}" | grep -c . || true)
 
           if [ "${DIR_COUNT}" -eq 0 ]; then
@@ -66,13 +66,24 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Find the PR that was merged for this commit
-          PR_DATA=$(gh pr list --state merged --search "${{ github.sha }}" --json author --limit 1)
-          AUTHOR=$(echo "${PR_DATA}" | jq -r '.[0].author.login // empty')
+          AUTHOR=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
+            --jq '.[0].user.login // empty' 2>/dev/null || true)
 
           if [ -z "${AUTHOR}" ]; then
-            # Fall back to commit author
-            AUTHOR=$(git log -1 --format='%an' HEAD)
-            echo "::warning::Could not determine PR author, using commit author: ${AUTHOR}"
+            # Try searching by merge commit SHA
+            AUTHOR=$(gh pr list --state merged --search "${{ github.sha }}" --json author --limit 1 \
+              --jq '.[0].author.login // empty' 2>/dev/null || true)
+          fi
+
+          if [ -z "${AUTHOR}" ]; then
+            # Fall back to commit author GitHub login
+            AUTHOR=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}" \
+              --jq '.author.login // empty' 2>/dev/null || true)
+          fi
+
+          if [ -z "${AUTHOR}" ]; then
+            echo "::error::Could not determine PR author"
+            exit 1
           fi
 
           echo "github_username=${AUTHOR}" >> "$GITHUB_OUTPUT"

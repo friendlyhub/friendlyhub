@@ -165,7 +165,13 @@ async fn review_decision(
         _ => unreachable!(),
     };
     submission::update_status(&state.db, id, new_status).await?;
-    notifications::notify_review_decision(id, &input.decision, &input.comment).await;
+
+    // Look up the app ID string for GitHub issue notifications
+    let found_app = app::find_by_id(&state.db, sub.app_id).await?;
+    let app_id_str = found_app.as_ref().map(|a| a.app_id.as_str()).unwrap_or("unknown");
+    notifications::notify_review_decision(
+        &state.github, app_id_str, &sub.version, &input.decision, &input.comment,
+    ).await;
 
     // If approved, publish via flat-manager and update app from metainfo
     if input.decision == "approved" {
@@ -200,7 +206,7 @@ async fn review_decision(
                         fm_build_id = fm_build_id,
                         "Build published via flat-manager"
                     );
-                    notifications::notify_published(id, &sub.app_id.to_string()).await;
+                    notifications::notify_published(&state.github, app_id_str, &sub.version).await;
                 }
                 Err(e) => {
                     tracing::error!(
