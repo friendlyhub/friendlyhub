@@ -1,6 +1,6 @@
-# Submitting an App
+# Submitting via the Web
 
-This guide covers the web-based submission flow for publishing a Flatpak app on FriendlyHub.
+This guide covers the web-based submission flow. If you prefer working with Git and pull requests, see [Submitting via Pull Request](/submitting-via-pr).
 
 ## Prerequisites
 
@@ -21,6 +21,8 @@ Sign in to [friendlyhub.org](https://friendlyhub.org) with your GitHub account, 
 - **Original Developer** -- You are the author or official maintainer of the software. You'll need to verify ownership of the domain in your app's ID.
 - **Community Packager** -- You're packaging someone else's software for Flatpak. No domain verification is needed, but you must specify the original app's upstream ID.
 
+![Developer type](/images/developer_type.png)
+
 ### Choose Your App ID
 
 Your app ID must be in reverse-DNS format with at least three components, e.g. `org.example.MyApp`.
@@ -29,9 +31,13 @@ Your app ID must be in reverse-DNS format with at least three components, e.g. `
 
 **For custom domains**, you'll need to place a verification token at `https://yourdomain.org/.well-known/org.friendlyhub.VerifiedApps.txt`. The token is generated during registration and is shared across all apps under the same domain.
 
+![Developer verified](/images/developer_verified.png)
+
 ## Step 2: Submit a Version
 
 Once your app is registered and verified (if applicable), go to your app's page in the dashboard and click **Submit Version**.
+
+![Start a submission](/images/developer_start_submission.png)
 
 The submission page has two sections:
 
@@ -44,7 +50,14 @@ You can write your manifest using either:
 
 The manifest must include the standard Flatpak manifest fields (`id`, `runtime`, `sdk`, `command`, `modules`). You can switch between JSON and YAML formats at any time.
 
+![Submitting the app manifest](/images/developer_submit_manifest.png)
+
+> [!TIP]
+> The form and editor views update each other. This means that, for example, you can start using the editor and, as you make changes, the form will auto-update. You can then switch to the form, make changes there, and see your changes updated in the manifest. 
+
 If your build requires additional source files (patches, data files, etc.), you can upload them as part of the submission.
+
+![Submitting additional source files](/images/developer_submit_sourcefiles.png)
 
 ### AppStream Metainfo
 
@@ -55,6 +68,8 @@ Similarly, the metainfo section has both a form view and a code editor. Your met
 - At least one screenshot
 - At least one release entry
 - Project licence (SPDX identifier)
+
+![Submitting the appstream metainfo](/images/developer_submit_metainfo.png)
 
 ## Step 3: Automated Checks
 
@@ -78,6 +93,18 @@ After automated checks pass, FriendlyHub creates a GitHub repository for your ap
 
 You can follow the build progress in real-time from your submission's detail page. Builds typically take around 10-15 minutes depending on your app's dependencies.
 
+![Build starting](/images/developer_build_start.png)
+
+If you want to monitor your build in detail, click **Open in GitHub** to see the GitHub logs from the build process.
+
+At this point, you should also receive an email from GitHub inviting you to the repository that was created for your submission. Be sure to accept this invitation within 7 days.
+
+![Repo invitation](/images/developer_repo_invite.png)
+
+Once the build completes, you will be shown the status of the automated checks and, if everything seems OK, your submission will change to **pending review**.
+
+![Build complete](/images/developer_build_complete.png)
+
 ## Step 5: Review
 
 Once the build succeeds, your submission enters the review queue. A human reviewer will check for:
@@ -85,6 +112,9 @@ Once the build succeeds, your submission enters the review queue. A human review
 - **Safety** -- No malware, no deceptive behaviour
 - **Accurate metadata** -- The app description and screenshots match what the app actually does
 - **Working app** -- The built Flatpak runs and does what it claims
+
+> [!IMPORTANT]
+> Whilst it can be frustrating to be waiting for your app to be approved, please understand that all reviewers do so on a voluntary basis!
 
 ### What We Don't Gatekeep On
 
@@ -101,7 +131,15 @@ The reviewer will either **approve** your submission or request **changes** with
 
 ## After Approval
 
-Once approved, your app is published to the FriendlyHub repository. Users can install it immediately:
+Once approved, your app is published to the FriendlyHub repository. Your Apps palge will now show a **published** badge. 
+
+![App published](/images/developer_app_published.png)
+
+When approving an app, the reviewer may have left some comments or suggestions for your submission. On the other hand, if there's something wrong with your submission, the reviewer will request changes. You can view any comments the reviewer has left on your submission in the submission page.
+
+![Submission comments](/images/developer_review_comment.png)
+
+Users can install it immediately:
 
 ```bash
 flatpak install friendlyhub org.example.MyApp
@@ -109,6 +147,10 @@ flatpak install friendlyhub org.example.MyApp
 
 Your app will also appear on the [FriendlyHub website](https://friendlyhub.org/apps), in GNOME Software, and in KDE Discover for users who have the FriendlyHub remote configured.
 
+![App page](/images/developer_app_page.png)
+
 ## Submitting Updates
 
 To submit a new version, go to your app's page in the dashboard and click **Submit Version** again. The process is the same: update your manifest and/or metainfo, submit, automated checks, build, review. Verified developers may be fast-tracked on updates.
+
+You can also submit updates via pull request to your app's GitHub repository (`friendlyhub/{app-id}`). See [Submitting via Pull Request](/submitting-via-pr) for details.

@@ -31,7 +31,8 @@ export default defineConfig({
       {
         text: 'Developer Guide',
         items: [
-          { text: 'Submitting an App', link: '/submitting-an-app' },
+          { text: 'Submitting via the Web', link: '/submitting-an-app' },
+          { text: 'Submitting via Pull Request', link: '/submitting-via-pr' },
         ],
       },
       {

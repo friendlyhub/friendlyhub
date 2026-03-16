@@ -74,9 +74,31 @@ We aim to review submissions within 48 hours. If the queue is backing up, priori
 
 ## The Review Queue
 
-Access the review queue from **Dashboard > Review Queue** (visible to reviewers and admins only). Submissions appear in the queue after automated checks pass and the build succeeds. Each submission shows:
+Access the review queue from **Dashboard > Review Queue** (visible to reviewers and admins only). Submissions appear in the queue after automated checks pass and the build succeeds. 
+
+![New review](/images/review_new.png)
+
+Each submission shows:
 
 - The app name and ID
 - Automated check results (manifest lint, permissions audit, metadata completeness)
 - The manifest and metainfo content
 - Build status and logs
+
+Before starting a manual review, ensure the automated checks have passed:
+
+![Automated checks](/images/review_automated.png)
+
+Whilst reviewing the manifest and appstream metadata, you may find sections you wish to refer to in your review. Highlight the relevant lines and use **Quote Selection** to mention these in your review.
+
+![Quoting file lines](/images/review_quote.png)
+
+You can use markdown formatting in your review comment. A simple editor is provided.
+
+![Review comment](/images/review_comment.png)
+
+Before submitting your comment(s), you can preview what the developer will see.
+
+![Review comment preview](/images/review_preview.png)
+
+If you accept a review, FriendlyHub will trigger the synchronisation process and the app will be available within 2 minutes. 

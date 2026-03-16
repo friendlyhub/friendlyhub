@@ -134,7 +134,7 @@ export default function SubmissionDetail({ reviewMode = false }: Props) {
                   ) : (
                     <MessageSquare className="w-5 h-5 text-orange-600" />
                   )}
-                  <h2 className={`text-lg font-semibold ${isApproved ? 'text-green-800' : 'text-orange-800'}`}>
+                  <h2 className={`text-lg font-semibold ${isApproved ? 'text-green-800 dark:text-green-200' : 'text-orange-800 dark:text-orange-200'}`}>
                     {isApproved ? 'Approved' : 'Changes Requested'}
                   </h2>
                 </div>
@@ -146,15 +146,15 @@ export default function SubmissionDetail({ reviewMode = false }: Props) {
                       className="w-5 h-5 rounded-full"
                     />
                   )}
-                  <span className={`text-sm font-medium ${isApproved ? 'text-green-700' : 'text-orange-700'}`}>
+                  <span className={`text-sm font-medium ${isApproved ? 'text-green-700 dark:text-green-300' : 'text-orange-700 dark:text-orange-300'}`}>
                     {rev.reviewer_name || 'Reviewer'}
                   </span>
-                  <span className={`text-sm ${isApproved ? 'text-green-600' : 'text-orange-600'}`}>
+                  <span className={`text-sm ${isApproved ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}`}>
                     {formatDate(rev.created_at)}
                   </span>
                 </div>
                 {rev.comment && (
-                  <div className={`text-sm prose prose-sm max-w-none ${isApproved ? 'prose-green' : 'prose-orange'}`}>
+                  <div className={`text-sm prose prose-sm max-w-none ${isApproved ? 'prose-green dark:prose-invert' : 'prose-orange dark:prose-invert'}`}>
                     <ReactMarkdown components={mdComponents}>{rev.comment}</ReactMarkdown>
                   </div>
                 )}

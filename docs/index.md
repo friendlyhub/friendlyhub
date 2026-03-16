@@ -22,7 +22,7 @@ features:
   - title: For Developers
     icon:
       src: /icons/wrench.svg
-    details: Submit your Flatpak app to FriendlyHub through our web-based submission flow.
+    details: Submit your Flatpak app to FriendlyHub via the web or by opening a pull request.
     link: /submitting-an-app
   - title: For Reviewers
     icon:
