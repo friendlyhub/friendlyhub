@@ -26,11 +26,9 @@ export default function ReviewQueue() {
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">v{sub.version}</span>
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">{sub.app_id}</span>
                   <span className="text-gray-400 mx-2">&middot;</span>
-                  <span className="text-sm text-gray-500 dark:text-gray-400 font-mono">
-                    {sub.app_id.slice(0, 8)}...
-                  </span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">v{sub.version}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-gray-500 dark:text-gray-400">

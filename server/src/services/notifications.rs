@@ -1,12 +1,45 @@
-use uuid::Uuid;
-
 use crate::services::github::GitHubService;
 
-pub async fn notify_build_complete(submission_id: Uuid, success: bool) {
-    if success {
-        tracing::info!(submission_id = %submission_id, "NOTIFY: Build succeeded, submission moved to review queue");
+pub async fn notify_build_complete(
+    github: &GitHubService,
+    app_id: &str,
+    version: &str,
+    success: bool,
+    build_log_url: Option<&str>,
+) {
+    let (title, body, label) = if success {
+        (
+            format!("v{version} build succeeded"),
+            format!(
+                "**{app_id}** v{version} built successfully and is now in the review queue.\n\n\
+                 You will be notified here when a reviewer has looked at it."
+            ),
+            "build-succeeded",
+        )
     } else {
-        tracing::info!(submission_id = %submission_id, "NOTIFY: Build failed");
+        let log_line = match build_log_url {
+            Some(url) => format!("\n\n[View build log]({url})"),
+            None => String::new(),
+        };
+        (
+            format!("v{version} build failed"),
+            format!(
+                "**{app_id}** v{version} failed to build.{log_line}\n\n\
+                 Please fix the issue and submit a new version."
+            ),
+            "build-failed",
+        )
+    };
+
+    if let Err(e) = github
+        .create_issue(app_id, &title, &body, &[label])
+        .await
+    {
+        tracing::warn!(
+            app_id = app_id,
+            error = %e,
+            "Failed to create GitHub issue for build notification"
+        );
     }
 }
 

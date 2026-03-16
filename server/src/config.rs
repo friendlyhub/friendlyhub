@@ -10,7 +10,9 @@ pub struct Config {
     pub github_client_id: String,
     pub github_client_secret: String,
     pub github_org: String,
-    pub github_token: String,
+    pub github_app_id: String,
+    pub github_app_installation_id: String,
+    pub github_app_private_key: String,
     pub jwt_secret: String,
     pub frontend_url: String,
     pub ecs_cluster: String,
@@ -41,7 +43,9 @@ impl Config {
             github_client_secret: env::var("GITHUB_CLIENT_SECRET")
                 .unwrap_or_else(|_| "dev-client-secret".into()),
             github_org: env::var("GITHUB_ORG").unwrap_or_else(|_| "friendlyhub".into()),
-            github_token: env::var("GITHUB_TOKEN").unwrap_or_default(),
+            github_app_id: env::var("GITHUB_APP_ID").unwrap_or_default(),
+            github_app_installation_id: env::var("GITHUB_APP_INSTALLATION_ID").unwrap_or_default(),
+            github_app_private_key: env::var("GITHUB_APP_PRIVATE_KEY").unwrap_or_default(),
             jwt_secret: env::var("JWT_SECRET")
                 .unwrap_or_else(|_| "dev-secret-change-me".into()),
             frontend_url: env::var("FRONTEND_URL")

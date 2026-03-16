@@ -26,9 +26,19 @@ pub fn routes() -> Router<AppState> {
 async fn review_queue(
     State(state): State<AppState>,
     _reviewer: ReviewerUser,
-) -> Result<Json<Vec<submission::Submission>>, AppError> {
+) -> Result<Json<Value>, AppError> {
     let subs = submission::list_by_status(&state.db, "pending_review").await?;
-    Ok(Json(subs))
+    let mut enriched = Vec::with_capacity(subs.len());
+    for sub in &subs {
+        let app_id_str = match app::find_by_id(&state.db, sub.app_id).await? {
+            Some(a) => a.app_id,
+            None => sub.app_id.to_string(),
+        };
+        let mut val = serde_json::to_value(sub).unwrap_or_default();
+        val["app_id"] = serde_json::Value::String(app_id_str);
+        enriched.push(val);
+    }
+    Ok(Json(serde_json::Value::Array(enriched)))
 }
 
 /// Get a single submission's details for review.

@@ -25,7 +25,9 @@ provider:
     GITHUB_CLIENT_ID: ${ssm:/friendlyhub/${self:provider.stage}/github-client-id, 'placeholder'}
     GITHUB_CLIENT_SECRET: ${ssm:/friendlyhub/${self:provider.stage}/github-client-secret, 'placeholder'}
     GITHUB_ORG: friendlyhub
-    GITHUB_TOKEN: ${ssm:/friendlyhub/${self:provider.stage}/github-token}
+    GITHUB_APP_ID: ${ssm:/friendlyhub/${self:provider.stage}/github-app-id}
+    GITHUB_APP_INSTALLATION_ID: ${ssm:/friendlyhub/${self:provider.stage}/github-app-installation-id}
+    GITHUB_APP_PRIVATE_KEY: ${ssm:/friendlyhub/${self:provider.stage}/github-app-private-key}
     JWT_SECRET: ${ssm:/friendlyhub/${self:provider.stage}/jwt-secret, 'placeholder'}
     FRONTEND_URL: https://${self:custom.siteDomain.${self:provider.stage}}
     ECS_CLUSTER: !Ref ECSCluster

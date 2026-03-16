@@ -43,7 +43,12 @@ async fn main() {
         config.ecs_service.clone(),
     );
 
-    let github = GitHubService::new(&config.github_org, &config.github_token);
+    let github = GitHubService::new(
+        &config.github_org,
+        &config.github_app_id,
+        &config.github_app_installation_id,
+        &config.github_app_private_key,
+    );
 
     let state = AppState {
         db,

@@ -306,6 +306,7 @@ async fn pr_submit(
     .await?;
 
     // Find or create the app
+    let mut app_is_new = false;
     let found_app = match app::find_by_app_id(&state.db, &payload.app_id).await? {
         Some(existing) => {
             if existing.owner_id != db_user.id {
@@ -317,6 +318,7 @@ async fn pr_submit(
             existing
         }
         None => {
+            app_is_new = true;
             let input = CreateApp {
                 app_id: payload.app_id.clone(),
                 developer_type: "original".into(),
@@ -381,7 +383,7 @@ async fn pr_submit(
     .await?;
 
     // Create repo, push files, add collaborator, trigger build
-    ensure_repo_and_build(
+    if let Err(e) = ensure_repo_and_build(
         &state,
         &payload.app_id,
         sub.id,
@@ -390,7 +392,21 @@ async fn pr_submit(
         &payload.metainfo,
         &payload.source_files,
     )
-    .await?;
+    .await
+    {
+        tracing::error!(
+            app_id = %payload.app_id,
+            submission_id = %sub.id,
+            error = %e,
+            "ensure_repo_and_build failed, cleaning up"
+        );
+        let _ = submission::delete(&state.db, sub.id).await;
+        if app_is_new {
+            let _ = app::delete(&state.db, found_app.id).await;
+            let _ = state.github.delete_repo(&payload.app_id).await;
+        }
+        return Err(e);
+    }
 
     tracing::info!(
         submission_id = %sub.id,
@@ -419,6 +435,10 @@ async fn build_complete(
     let sub = submission::find_by_id(&state.db, payload.submission_id)
         .await?
         .ok_or_else(|| AppError::NotFound("Submission not found".into()))?;
+
+    let app_record = app::find_by_id(&state.db, sub.app_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("App not found".into()))?;
 
     if sub.status != "building" && sub.status != "pending_build" {
         return Err(AppError::BadRequest(format!(
@@ -455,7 +475,9 @@ async fn build_complete(
                 "Build succeeded, ran {} checks, moved to pending_review",
                 check_results.len()
             );
-            notifications::notify_build_complete(sub.id, true).await;
+            notifications::notify_build_complete(
+                &state.github, &app_record.app_id, &sub.version, true, None,
+            ).await;
         }
         "failure" => {
             if let Some(ref log_url) = payload.build_log_url {
@@ -467,7 +489,10 @@ async fn build_complete(
                 submission_id = %sub.id,
                 "Build failed"
             );
-            notifications::notify_build_complete(sub.id, false).await;
+            notifications::notify_build_complete(
+                &state.github, &app_record.app_id, &sub.version, false,
+                payload.build_log_url.as_deref(),
+            ).await;
         }
         other => {
             return Err(AppError::BadRequest(format!(

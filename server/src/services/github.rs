@@ -1,5 +1,10 @@
+use std::sync::Arc;
+
+use chrono::Utc;
+use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use reqwest::Client;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
 
 use crate::errors::AppError;
 
@@ -28,26 +33,44 @@ fn base64_encode(input: &[u8]) -> String {
     result
 }
 
-/// GitHub API client for managing build repos and triggering workflows.
+struct CachedToken {
+    token: String,
+    expires_at: chrono::DateTime<Utc>,
+}
+
+#[derive(Serialize)]
+struct AppJwtClaims {
+    iat: i64,
+    exp: i64,
+    iss: String,
+}
+
+#[derive(Deserialize)]
+struct InstallationTokenResponse {
+    token: String,
+    expires_at: String,
+}
+
+/// GitHub API client using GitHub App authentication.
 #[derive(Clone)]
 pub struct GitHubService {
     client: Client,
     org: String,
-    /// Personal access token or GitHub App token with repo + workflow permissions.
-    token: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct WorkflowDispatchResponse {
-    // GitHub returns 204 No Content on success, so this is unused
+    app_id: String,
+    installation_id: String,
+    private_key_pem: String,
+    token_cache: Arc<RwLock<Option<CachedToken>>>,
 }
 
 impl GitHubService {
-    pub fn new(org: &str, token: &str) -> Self {
+    pub fn new(org: &str, app_id: &str, installation_id: &str, private_key_pem: &str) -> Self {
         Self {
             client: Client::new(),
             org: org.to_string(),
-            token: token.to_string(),
+            app_id: app_id.to_string(),
+            installation_id: installation_id.to_string(),
+            private_key_pem: private_key_pem.to_string(),
+            token_cache: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -55,8 +78,93 @@ impl GitHubService {
         &self.org
     }
 
+    fn generate_app_jwt(&self) -> Result<String, AppError> {
+        let now = Utc::now().timestamp();
+        let claims = AppJwtClaims {
+            iat: now - 60,
+            exp: now + 540,
+            iss: self.app_id.clone(),
+        };
+        let header = Header::new(Algorithm::RS256);
+        let key = EncodingKey::from_rsa_pem(self.private_key_pem.as_bytes())
+            .map_err(|e| AppError::Internal(format!("Invalid GitHub App private key: {e}")))?;
+        encode(&header, &claims, &key)
+            .map_err(|e| AppError::Internal(format!("Failed to generate GitHub App JWT: {e}")))
+    }
+
+    async fn fetch_installation_token(&self) -> Result<CachedToken, AppError> {
+        let jwt = self.generate_app_jwt()?;
+        let url = format!(
+            "https://api.github.com/app/installations/{}/access_tokens",
+            self.installation_id
+        );
+
+        let resp = self
+            .client
+            .post(&url)
+            .header("User-Agent", "friendlyhub-api")
+            .header("Accept", "application/vnd.github+json")
+            .bearer_auth(&jwt)
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("Failed to fetch installation token: {e}")))?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(AppError::Internal(format!(
+                "GitHub installation token request returned {status}: {body}"
+            )));
+        }
+
+        let body: InstallationTokenResponse = resp
+            .json()
+            .await
+            .map_err(|e| AppError::Internal(format!("Failed to parse installation token response: {e}")))?;
+
+        let expires_at = chrono::DateTime::parse_from_rfc3339(&body.expires_at)
+            .map_err(|e| AppError::Internal(format!("Failed to parse token expiry: {e}")))?
+            .with_timezone(&Utc);
+
+        tracing::debug!("Fetched new GitHub App installation token, expires at {expires_at}");
+
+        Ok(CachedToken {
+            token: body.token,
+            expires_at,
+        })
+    }
+
+    async fn invalidate_token(&self) {
+        let mut cache = self.token_cache.write().await;
+        *cache = None;
+    }
+
+    async fn get_token(&self) -> Result<String, AppError> {
+        {
+            let cache = self.token_cache.read().await;
+            if let Some(ref cached) = *cache {
+                if cached.expires_at > Utc::now() + chrono::Duration::minutes(5) {
+                    return Ok(cached.token.clone());
+                }
+            }
+        }
+
+        let mut cache = self.token_cache.write().await;
+        if let Some(ref cached) = *cache {
+            if cached.expires_at > Utc::now() + chrono::Duration::minutes(5) {
+                return Ok(cached.token.clone());
+            }
+        }
+
+        let new_token = self.fetch_installation_token().await?;
+        let token = new_token.token.clone();
+        *cache = Some(new_token);
+        Ok(token)
+    }
+
     /// Create a new repo in the org for a Flatpak app.
     pub async fn create_repo(&self, repo: &str, description: &str) -> Result<(), AppError> {
+        let token = self.get_token().await?;
         let url = format!("https://api.github.com/orgs/{}/repos", self.org);
 
         let body = serde_json::json!({
@@ -71,7 +179,7 @@ impl GitHubService {
             .post(&url)
             .header("User-Agent", "friendlyhub-api")
             .header("Accept", "application/vnd.github+json")
-            .bearer_auth(&self.token)
+            .bearer_auth(&token)
             .json(&body)
             .send()
             .await
@@ -83,6 +191,36 @@ impl GitHubService {
             return Err(AppError::Internal(format!(
                 "GitHub create repo returned {status}: {body}"
             )));
+        }
+
+        // Invalidate cached token and wait until we can actually access the new repo
+        self.invalidate_token().await;
+        for attempt in 1..=10 {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            let token = self.get_token().await?;
+            let check_url = format!("https://api.github.com/repos/{}/{repo}/contents/", self.org);
+            let check = self
+                .client
+                .get(&check_url)
+                .header("User-Agent", "friendlyhub-api")
+                .header("Accept", "application/vnd.github+json")
+                .bearer_auth(&token)
+                .send()
+                .await;
+            match check {
+                Ok(r) if r.status().is_success() => {
+                    tracing::info!(repo = repo, attempt = attempt, "Repo is accessible");
+                    break;
+                }
+                Ok(r) => {
+                    tracing::warn!(repo = repo, attempt = attempt, status = %r.status(), "Repo not yet accessible");
+                    // Invalidate again in case the token needs refreshing
+                    self.invalidate_token().await;
+                }
+                Err(e) => {
+                    tracing::warn!(repo = repo, attempt = attempt, error = %e, "Repo check failed");
+                }
+            }
         }
 
         Ok(())
@@ -101,42 +239,63 @@ impl GitHubService {
             self.org
         );
 
-        // Check if file already exists to get its SHA (required for updates)
-        let existing_sha = self.get_file_sha(repo, path).await?;
-
         let encoded = base64_encode(content.as_bytes());
-        let mut body = serde_json::json!({
-            "message": message,
-            "content": encoded,
-        });
-        if let Some(sha) = existing_sha {
-            body["sha"] = serde_json::Value::String(sha);
-        }
 
-        let resp = self
-            .client
-            .put(&url)
-            .header("User-Agent", "friendlyhub-api")
-            .header("Accept", "application/vnd.github+json")
-            .bearer_auth(&self.token)
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| AppError::Internal(format!("GitHub API call failed: {e}")))?;
+        let mut attempts = 0;
+        loop {
+            attempts += 1;
+            let token = self.get_token().await?;
 
-        if !resp.status().is_success() {
+            // Check if file already exists to get its SHA (required for updates)
+            let existing_sha = self.get_file_sha(repo, path).await?;
+
+            let mut body = serde_json::json!({
+                "message": message,
+                "content": encoded,
+            });
+            if let Some(sha) = existing_sha {
+                body["sha"] = serde_json::Value::String(sha);
+            }
+
+            let resp = self
+                .client
+                .put(&url)
+                .header("User-Agent", "friendlyhub-api")
+                .header("Accept", "application/vnd.github+json")
+                .bearer_auth(&token)
+                .json(&body)
+                .send()
+                .await
+                .map_err(|e| AppError::Internal(format!("GitHub API call failed: {e}")))?;
+
+            if resp.status().is_success() {
+                return Ok(());
+            }
+
             let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
+            let resp_body = resp.text().await.unwrap_or_default();
+
+            if status.as_u16() == 403 && attempts < 4 {
+                tracing::warn!(
+                    repo = repo,
+                    path = path,
+                    attempt = attempts,
+                    "put_file got 403, invalidating token and retrying"
+                );
+                self.invalidate_token().await;
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                continue;
+            }
+
             return Err(AppError::Internal(format!(
-                "GitHub put file returned {status}: {body}"
+                "GitHub put file returned {status}: {resp_body}"
             )));
         }
-
-        Ok(())
     }
 
     /// Get the SHA of a file in a repo (None if it doesn't exist).
     async fn get_file_sha(&self, repo: &str, path: &str) -> Result<Option<String>, AppError> {
+        let token = self.get_token().await?;
         let url = format!(
             "https://api.github.com/repos/{}/{repo}/contents/{path}",
             self.org
@@ -147,7 +306,7 @@ impl GitHubService {
             .get(&url)
             .header("User-Agent", "friendlyhub-api")
             .header("Accept", "application/vnd.github+json")
-            .bearer_auth(&self.token)
+            .bearer_auth(&token)
             .send()
             .await
             .map_err(|e| AppError::Internal(format!("GitHub API call failed: {e}")))?;
@@ -195,12 +354,13 @@ impl GitHubService {
         let mut attempts = 0;
         loop {
             attempts += 1;
+            let token = self.get_token().await?;
             let resp = self
                 .client
                 .post(&url)
                 .header("User-Agent", "friendlyhub-api")
                 .header("Accept", "application/vnd.github+json")
-                .bearer_auth(&self.token)
+                .bearer_auth(&token)
                 .json(&body)
                 .send()
                 .await
@@ -241,12 +401,13 @@ impl GitHubService {
             self.org
         );
 
+        let token = self.get_token().await?;
         let resp = self
             .client
             .get(&url)
             .header("User-Agent", "friendlyhub-api")
             .header("Accept", "application/vnd.github+json")
-            .bearer_auth(&self.token)
+            .bearer_auth(&token)
             .send()
             .await
             .map_err(|e| AppError::Internal(format!("GitHub API call failed: {e}")))?;
@@ -269,6 +430,7 @@ impl GitHubService {
 
     /// Delete a repository from the org.
     pub async fn delete_repo(&self, repo: &str) -> Result<(), AppError> {
+        let token = self.get_token().await?;
         let url = format!("https://api.github.com/repos/{}/{repo}", self.org);
 
         let resp = self
@@ -276,7 +438,7 @@ impl GitHubService {
             .delete(&url)
             .header("User-Agent", "friendlyhub-api")
             .header("Accept", "application/vnd.github+json")
-            .bearer_auth(&self.token)
+            .bearer_auth(&token)
             .send()
             .await
             .map_err(|e| AppError::Internal(format!("GitHub API call failed: {e}")))?;
@@ -299,6 +461,7 @@ impl GitHubService {
 
     /// List files in the root of a repo, returning name + download_url for each.
     pub async fn list_repo_files(&self, repo: &str) -> Result<Vec<RepoFile>, AppError> {
+        let token = self.get_token().await?;
         let url = format!(
             "https://api.github.com/repos/{}/{repo}/contents/",
             self.org
@@ -309,7 +472,7 @@ impl GitHubService {
             .get(&url)
             .header("User-Agent", "friendlyhub-api")
             .header("Accept", "application/vnd.github+json")
-            .bearer_auth(&self.token)
+            .bearer_auth(&token)
             .send()
             .await
             .map_err(|e| AppError::Internal(format!("GitHub API call failed: {e}")))?;
@@ -343,6 +506,7 @@ impl GitHubService {
 
     /// Get workflow run jobs (for build progress proxying).
     pub async fn get_run_jobs(&self, repo: &str, run_id: i64) -> Result<serde_json::Value, AppError> {
+        let token = self.get_token().await?;
         let url = format!(
             "https://api.github.com/repos/{}/{repo}/actions/runs/{run_id}/jobs",
             self.org
@@ -353,7 +517,7 @@ impl GitHubService {
             .get(&url)
             .header("User-Agent", "friendlyhub-api")
             .header("Accept", "application/vnd.github+json")
-            .bearer_auth(&self.token)
+            .bearer_auth(&token)
             .send()
             .await
             .map_err(|e| AppError::Internal(format!("GitHub API call failed: {e}")))?;
@@ -373,6 +537,7 @@ impl GitHubService {
 
     /// Look up a GitHub user by login name. Returns their numeric ID and profile info.
     pub async fn get_user_by_login(&self, username: &str) -> Result<GitHubUser, AppError> {
+        let token = self.get_token().await?;
         let url = format!("https://api.github.com/users/{username}");
 
         let resp = self
@@ -380,7 +545,7 @@ impl GitHubService {
             .get(&url)
             .header("User-Agent", "friendlyhub-api")
             .header("Accept", "application/vnd.github+json")
-            .bearer_auth(&self.token)
+            .bearer_auth(&token)
             .send()
             .await
             .map_err(|e| AppError::Internal(format!("GitHub API call failed: {e}")))?;
@@ -409,6 +574,7 @@ impl GitHubService {
         username: &str,
         permission: &str,
     ) -> Result<(), AppError> {
+        let token = self.get_token().await?;
         let url = format!(
             "https://api.github.com/repos/{}/{repo}/collaborators/{username}",
             self.org
@@ -423,7 +589,7 @@ impl GitHubService {
             .put(&url)
             .header("User-Agent", "friendlyhub-api")
             .header("Accept", "application/vnd.github+json")
-            .bearer_auth(&self.token)
+            .bearer_auth(&token)
             .json(&body)
             .send()
             .await
@@ -442,6 +608,7 @@ impl GitHubService {
 
     /// Check if a repository exists in the org.
     pub async fn repo_exists(&self, repo: &str) -> Result<bool, AppError> {
+        let token = self.get_token().await?;
         let url = format!("https://api.github.com/repos/{}/{repo}", self.org);
 
         let resp = self
@@ -449,7 +616,7 @@ impl GitHubService {
             .get(&url)
             .header("User-Agent", "friendlyhub-api")
             .header("Accept", "application/vnd.github+json")
-            .bearer_auth(&self.token)
+            .bearer_auth(&token)
             .send()
             .await
             .map_err(|e| AppError::Internal(format!("GitHub API call failed: {e}")))?;
@@ -465,6 +632,7 @@ impl GitHubService {
         body: &str,
         labels: &[&str],
     ) -> Result<(), AppError> {
+        let token = self.get_token().await?;
         let url = format!("https://api.github.com/repos/{}/{repo}/issues", self.org);
 
         let payload = serde_json::json!({
@@ -478,7 +646,7 @@ impl GitHubService {
             .post(&url)
             .header("User-Agent", "friendlyhub-api")
             .header("Accept", "application/vnd.github+json")
-            .bearer_auth(&self.token)
+            .bearer_auth(&token)
             .json(&payload)
             .send()
             .await

@@ -225,21 +225,47 @@ The display name from `git log` is NOT used because it doesn't correspond to a G
 
 ## Testing with dummyapp
 
-Use `dummyapp/` in this repo (gitignored). Files:
-- `dummyapp/org.friendlyhub.DummyApp.yml` — Flatpak manifest (sources point to `https://github.com/icemaltacode/dummyapp.git` tag `v0.1.0`)
-- `dummyapp/org.friendlyhub.DummyApp.metainfo.xml` — AppStream metainfo
-- `dummyapp/org.friendlyhub.DummyApp.desktop` — Desktop entry
-- `dummyapp/org.friendlyhub.DummyApp.svg` — Icon
-- `dummyapp/cargo-sources.json` — Vendored Rust crate sources (generated via `flatpak-cargo-generator Cargo.lock`)
-- `dummyapp/src/main.rs` + `Cargo.toml` — GTK4 Rust app (button -> "Hello World!")
+Test app: `org.friendlyhub.DummyApp`
+Upstream source repo: `github.com/icemaltacode/dummyapp` (tag `v0.1.0`)
 
-To test new app submission:
+### Local reference files
+
+The `dummyapp/` directory in this repo (gitignored) has all the files for reference:
+- `org.friendlyhub.DummyApp.yml` — Flatpak manifest
+- `org.friendlyhub.DummyApp.metainfo.xml` — AppStream metainfo
+- `cargo-sources.json` — Vendored Rust crate sources (generated via `flatpak-cargo-generator Cargo.lock`)
+- `org.friendlyhub.DummyApp.desktop` — Desktop entry (referenced by manifest, lives in upstream source repo)
+- `org.friendlyhub.DummyApp.svg` — Icon (referenced by manifest, lives in upstream source repo)
+- `src/main.rs` + `Cargo.toml` — The actual GTK4 Rust app (lives in upstream source repo)
+
+### What goes in the forked submissions repo
+
+When submitting via PR, the fork needs a single directory named after the app ID containing:
+
+```
+org.friendlyhub.DummyApp/
+  org.friendlyhub.DummyApp.yml          # Flatpak manifest (required, .json/.yaml/.yml)
+  org.friendlyhub.DummyApp.metainfo.xml # AppStream metainfo (required, must be named {app-id}.metainfo.xml)
+  cargo-sources.json                     # Companion source files (any .json that isn't the manifest)
+```
+
+Only these three types of file matter:
+1. **Manifest** (required) — detected by scanning for a `.json`/`.yaml`/`.yml` file containing `app-id` or `id`
+2. **Metainfo** (required) — must be named exactly `{app-id}/{app-id}.metainfo.xml`
+3. **Companion JSON files** (optional) — any other `.json` files in the directory (e.g. `cargo-sources.json`). These get sent to the API as `source_files` and pushed to the app repo.
+
+Non-JSON files like `.desktop`, `.svg`, or source code are NOT collected by the workflow. Those must live in the upstream source repo and be referenced in the manifest as git sources.
+
+### Test steps
+
 1. Fork `friendlyhub/submissions`
-2. Add `org.friendlyhub.DummyApp/` with manifest + metainfo + cargo-sources.json from `dummyapp/`
-3. Open PR, verify pr-check validates and verification comment appears (if custom domain)
-4. Comment `/recheck` after placing well-known token to verify domain
-5. Merge, verify submission created + build triggered
-6. Check: app record created, app repo created, build triggered, PR author is triage collaborator (pending invite)
-7. Check: forge-based IDs are auto-verified, custom domains are unverified unless token was placed
-8. Check: submission appears in review queue after build succeeds
-9. Log into website as the PR author — app appears under "My Apps"
+2. Create `org.friendlyhub.DummyApp/` and add the manifest, metainfo, and cargo-sources.json from `dummyapp/`
+3. Open PR against `friendlyhub/submissions` main branch
+4. Verify `pr-check` runs: manifest validated, metainfo validated, verification check runs
+5. If custom domain: verification comment appears with well-known token instructions. Comment `/recheck` after placing the token.
+6. Merge the PR
+7. Verify `on-merge` runs: submission created, app repo created at `friendlyhub/org.friendlyhub.DummyApp`, build triggered
+8. Verify PR author gets triage collaborator invite on the app repo
+9. Verify forge-based IDs (io.github.*, etc.) are auto-verified; custom domains stay unverified unless token was placed
+10. Wait for build to complete (~13 mins), then verify submission appears in review queue
+11. Log into friendlyhub.org as the PR author — app appears under "My Apps"
