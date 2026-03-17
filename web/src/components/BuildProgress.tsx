@@ -83,12 +83,14 @@ export default function BuildProgress({ appId, runId, runUrl, isBuilding }: Prop
     staleTime: isBuilding ? 3_000 : 60_000,
   });
 
-  // When build finishes (isBuilding flips false), do one final refetch so the
-  // card shows completed steps instead of staying stuck on "Building Flatpak".
+  // When build finishes (isBuilding flips false), refetch after a short delay
+  // so GHA has time to finalize all job steps (e.g. "Stop containers").
   const wasBuilding = useRef(isBuilding);
   useEffect(() => {
     if (wasBuilding.current && !isBuilding) {
       refetch();
+      const timer = setTimeout(() => refetch(), 5_000);
+      return () => clearTimeout(timer);
     }
     wasBuilding.current = isBuilding;
   }, [isBuilding, refetch]);
