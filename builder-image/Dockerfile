@@ -1,4 +1,4 @@
-# FriendlyHub Flatpak Builder
+# FriendlyHub Flatpak Builder — version 0.1.0
 # Used in GitHub Actions to build Flatpak apps and upload to flat-manager.
 #
 # Based on Fedora for up-to-date flatpak tooling.
