@@ -40,6 +40,14 @@ if [ -z "${FLAT_MANAGER_URL:-}" ]; then
     fi
     echo ">>> flat-manager URL: ${FLAT_MANAGER_URL}"
 fi
+# Notify FriendlyHub that this arch build has started (sets gha_run_id for live progress)
+GHA_RUN_URL="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-unknown}/actions/runs/${GITHUB_RUN_ID:-0}"
+if [ -n "${SUBMISSION_ID}" ] && [ "${SUBMISSION_ID}" != "manual" ]; then
+    curl -s -X POST "${FRIENDLYHUB_API_URL}/api/v1/webhooks/build-started" \
+        -H "Content-Type: application/json" \
+        -H "x-webhook-secret: ${WEBHOOK_SECRET}" \
+        -d "{\"submission_id\": \"${SUBMISSION_ID}\", \"arch\": \"${ARCH}\", \"gha_run_id\": ${GITHUB_RUN_ID:-0}, \"gha_run_url\": \"${GHA_RUN_URL}\"}" || true
+fi
 echo ""
 
 # Step 1: Build the Flatpak

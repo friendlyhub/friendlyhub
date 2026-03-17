@@ -4,6 +4,27 @@
 # Based on Fedora for up-to-date flatpak tooling.
 # Pre-installs freedesktop + GNOME + KDE runtimes so builds don't re-download them every time.
 
+# Stage 1: Build flat-manager-client from source
+FROM fedora:43 AS fm-client-builder
+
+RUN dnf install -y \
+    cargo \
+    rust \
+    gcc \
+    pkg-config \
+    openssl-devel \
+    ostree-devel \
+    glib2-devel \
+    git \
+    && dnf clean all
+
+RUN git clone --depth 1 https://github.com/flatpak/flat-manager.git /flat-manager
+
+WORKDIR /flat-manager
+RUN cargo build --release --package flat-manager-client && \
+    cp target/release/flat-manager-client /usr/local/bin/flat-manager-client
+
+# Stage 2: Final builder image
 FROM fedora:43
 
 RUN dnf install -y \
@@ -14,6 +35,9 @@ RUN dnf install -y \
     jq \
     xz \
     bzip2 \
+    ostree-libs \
+    glib2 \
+    openssl-libs \
     && dnf clean all
 
 # Add Flathub remote (source of runtimes/SDKs)
@@ -35,13 +59,8 @@ RUN flatpak install -y --noninteractive flathub \
     org.kde.Platform//6.10 \
     org.kde.Sdk//6.10
 
-# Install flat-manager-client (Python-based) for uploading builds
-RUN dnf install -y python3 python3-pip python3-aiohttp python3-gobject ostree-libs && \
-    pip3 install --break-system-packages aiohttp tenacity && \
-    curl -sL https://raw.githubusercontent.com/flatpak/flat-manager/master/flat-manager-client \
-      -o /usr/local/bin/flat-manager-client && \
-    chmod +x /usr/local/bin/flat-manager-client && \
-    dnf clean all
+# Copy flat-manager-client built from source
+COPY --from=fm-client-builder /usr/local/bin/flat-manager-client /usr/local/bin/flat-manager-client
 
 # Copy the build script
 COPY build.sh /usr/local/bin/friendlyhub-build

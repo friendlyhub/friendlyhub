@@ -18,6 +18,7 @@ use super::submissions::ensure_repo_and_build;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
+        .route("/webhooks/build-started", post(build_started))
         .route("/webhooks/build-complete", post(build_complete))
         .route("/webhooks/submit", post(webhook_submit))
         .route("/webhooks/pr-submit", post(pr_submit))
@@ -49,6 +50,48 @@ fn verify_webhook_secret(headers: &HeaderMap, state: &AppState) -> Result<(), Ap
         return Err(AppError::Unauthorized);
     }
     Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+struct BuildStartedPayload {
+    submission_id: Uuid,
+    arch: String,
+    gha_run_id: i64,
+    gha_run_url: String,
+}
+
+/// Called by the build script at the start of a build to register the GHA run ID.
+async fn build_started(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<BuildStartedPayload>,
+) -> Result<Json<Value>, AppError> {
+    verify_webhook_secret(&headers, &state)?;
+
+    let sub = submission::find_by_id(&state.db, payload.submission_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Submission not found".into()))?;
+
+    if sub.status != "building" && sub.status != "pending_build" {
+        return Ok(Json(serde_json::json!({ "ok": true })));
+    }
+
+    let arch_build = submission::ArchBuild {
+        status: "building".to_string(),
+        gha_run_id: Some(payload.gha_run_id),
+        gha_run_url: Some(payload.gha_run_url),
+        ..Default::default()
+    };
+    submission::update_arch_build(&state.db, payload.submission_id, &payload.arch, arch_build).await?;
+
+    tracing::info!(
+        submission_id = %payload.submission_id,
+        arch = %payload.arch,
+        gha_run_id = payload.gha_run_id,
+        "Build started, registered GHA run ID"
+    );
+
+    Ok(Json(serde_json::json!({ "ok": true })))
 }
 
 /// Validate a Flatpak manifest (webhook-authed, used by PR CI).
