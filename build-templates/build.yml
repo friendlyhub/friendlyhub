@@ -23,13 +23,18 @@ on:
         required: false
         type: string
         default: ""
+      arch:
+        description: "Target architecture (x86_64 or aarch64)"
+        required: true
+        type: string
+        default: "x86_64"
 
 jobs:
   build:
-    name: Build and Upload
-    runs-on: ubuntu-latest
+    name: Build (${{ inputs.arch }})
+    runs-on: ${{ inputs.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     container:
-      image: ghcr.io/friendlyhub/flatpak-builder:latest
+      image: ghcr.io/friendlyhub/flatpak-builder:${{ inputs.arch }}
       options: --privileged
 
     steps:
@@ -86,6 +91,7 @@ jobs:
         env:
           MANIFEST_PATH: ${{ steps.detect.outputs.manifest }}
           APP_ID: ${{ steps.detect.outputs.app_id }}
+          ARCH: ${{ inputs.arch }}
           FLAT_MANAGER_TOKEN: ${{ secrets.FLAT_MANAGER_TOKEN }}
           REPO_NAME: stable
           FRIENDLYHUB_API_URL: ${{ secrets.FRIENDLYHUB_API_URL }}
@@ -99,6 +105,7 @@ jobs:
           FRIENDLYHUB_API_URL: ${{ secrets.FRIENDLYHUB_API_URL }}
           WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
           SUBMISSION_ID: ${{ inputs.submission_id }}
+          ARCH: ${{ inputs.arch }}
         run: |
           if [ -n "${SUBMISSION_ID}" ] && [ "${SUBMISSION_ID}" != "manual" ]; then
             GHA_RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
@@ -108,6 +115,9 @@ jobs:
               -d "{
                 \"submission_id\": \"${SUBMISSION_ID}\",
                 \"result\": \"failure\",
+                \"arch\": \"${ARCH}\",
+                \"gha_run_id\": ${GITHUB_RUN_ID},
+                \"gha_run_url\": \"${GHA_RUN_URL}\",
                 \"build_log_url\": \"${GHA_RUN_URL}\"
               }"
           fi

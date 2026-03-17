@@ -104,7 +104,7 @@ export default function SubmissionDetail({ reviewMode = false }: Props) {
       )}
       <div className="flex items-center gap-3 mb-6">
         <StatusBadge status={sub.status} />
-        {sub.build_log_url && (
+        {!sub.builds && sub.build_log_url && (
           <a
             href={sub.build_log_url}
             className="inline-flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 font-medium"
@@ -178,7 +178,7 @@ export default function SubmissionDetail({ reviewMode = false }: Props) {
                 {formatDate(sub.created_at)}
               </dd>
             </div>
-            {sub.fm_build_id && (
+            {!sub.builds && sub.fm_build_id && (
               <div>
                 <dt className="text-gray-500 dark:text-gray-400">flat-manager Build</dt>
                 <dd className="font-mono text-gray-900 dark:text-gray-100">#{sub.fm_build_id}</dd>
@@ -187,14 +187,49 @@ export default function SubmissionDetail({ reviewMode = false }: Props) {
           </dl>
         </div>
 
-        {sub.gha_run_id && appInfo?.app_id && (
+        {sub.builds ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {Object.entries(sub.builds).map(([arch, build]) => (
+              <div key={arch} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <h3 className="font-mono text-sm font-medium text-gray-900 dark:text-gray-100">{arch}</h3>
+                  <StatusBadge status={build.status} />
+                  {build.build_log_url && (
+                    <a
+                      href={build.build_log_url}
+                      className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      Build Log
+                    </a>
+                  )}
+                </div>
+                {build.gha_run_id && appInfo?.app_id && (
+                  <BuildProgress
+                    appId={appInfo.app_id}
+                    runId={build.gha_run_id}
+                    runUrl={build.gha_run_url}
+                    isBuilding={build.status === 'building' || build.status === 'pending'}
+                  />
+                )}
+                {build.fm_build_id && (
+                  <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    flat-manager build #{build.fm_build_id}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : sub.gha_run_id && appInfo?.app_id ? (
           <BuildProgress
             appId={appInfo.app_id}
             runId={sub.gha_run_id}
             runUrl={sub.gha_run_url}
             isBuilding={sub.status === 'building' || sub.status === 'pending_build'}
           />
-        )}
+        ) : null}
 
         <AutomatedChecks checks={checks} />
         <SubmissionCards

@@ -33,6 +33,38 @@ struct SubmitRequest {
     /// Keys are filenames, values are file contents as strings.
     #[serde(default)]
     source_files: HashMap<String, String>,
+    /// Target CPU architectures to build for.
+    /// Empty = default to all supported arches.
+    #[serde(default)]
+    target_arches: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct FriendlyHubConfig {
+    #[serde(rename = "only-arches")]
+    only_arches: Option<Vec<String>>,
+    #[serde(rename = "skip-arches")]
+    skip_arches: Option<Vec<String>>,
+}
+
+pub fn resolve_arches(target_arches: &[String], source_files: &HashMap<String, String>) -> Vec<String> {
+    if !target_arches.is_empty() {
+        return target_arches.to_vec();
+    }
+
+    if let Some(config) = source_files.get("friendlyhub.json") {
+        if let Ok(parsed) = serde_json::from_str::<FriendlyHubConfig>(config) {
+            if let Some(only) = parsed.only_arches {
+                return only;
+            }
+            if let Some(skip) = parsed.skip_arches {
+                let all = vec!["x86_64".into(), "aarch64".into()];
+                return all.into_iter().filter(|a| !skip.contains(a)).collect();
+            }
+        }
+    }
+
+    vec!["x86_64".into(), "aarch64".into()]
 }
 
 async fn submit(
@@ -112,7 +144,8 @@ async fn submit(
     .await?;
 
     // Push manifest to the app's GitHub repo and trigger a build
-    ensure_repo_and_build(&state, &app.app_id, sub.id, app.owner_id, &input.manifest, &input.metainfo, &input.source_files).await?;
+    let arches = resolve_arches(&input.target_arches, &input.source_files);
+    ensure_repo_and_build(&state, &app.app_id, sub.id, app.owner_id, &input.manifest, &input.metainfo, &input.source_files, &arches).await?;
 
     Ok(Json(serde_json::json!({
         "id": sub.id,
@@ -227,6 +260,7 @@ async fn source_files(
             let n = &f.name;
             n != "README.md"
                 && n != ".gitignore"
+                && n != "friendlyhub.json"
                 && n != &manifest_json
                 && n != &manifest_yaml
                 && n != &manifest_yml
@@ -248,6 +282,7 @@ pub async fn ensure_repo_and_build(
     manifest: &Value,
     metainfo: &str,
     source_files: &HashMap<String, String>,
+    arches: &[String],
 ) -> Result<(), AppError> {
     let repo = app_id;
     if !state.github.repo_exists(repo).await? {
@@ -341,22 +376,37 @@ pub async fn ensure_repo_and_build(
         )
         .await?;
 
-    let inputs = serde_json::json!({
-        "submission_id": submission_id.to_string(),
-        "app_id": app_id,
-        "manifest_path": format!("{app_id}.json"),
-    });
-    state
-        .github
-        .trigger_build(repo, "build.yml", "main", &inputs)
-        .await?;
+    // Write friendlyhub.json if not building for all arches
+    if arches.len() < 2 {
+        let config = serde_json::json!({ "only-arches": arches });
+        state
+            .github
+            .put_file(
+                repo,
+                "friendlyhub.json",
+                &serde_json::to_string_pretty(&config)
+                    .map_err(|e| AppError::Internal(format!("Failed to serialize friendlyhub.json: {e}")))?,
+                &format!("[friendlyhub-api] Update arch config for submission {submission_id}"),
+            )
+            .await?;
+    }
+
+    submission::init_builds(&state.db, submission_id, arches).await?;
+
+    for arch in arches {
+        let inputs = serde_json::json!({
+            "submission_id": submission_id.to_string(),
+            "app_id": app_id,
+            "manifest_path": format!("{app_id}.json"),
+            "arch": arch,
+        });
+        state
+            .github
+            .trigger_build(repo, "build.yml", "main", &inputs)
+            .await?;
+    }
 
     submission::update_status(&state.db, submission_id, "building").await?;
-
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-    if let Some(run) = state.github.find_latest_run(repo, "build.yml").await? {
-        submission::set_build_info(&state.db, submission_id, run.id, &run.html_url).await?;
-    }
 
     Ok(())
 }

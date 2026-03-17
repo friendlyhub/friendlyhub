@@ -123,53 +123,52 @@ def update_summary():
     extract_appstream()
 
 
+ARCHES = ["x86_64", "aarch64"]
+
+
 def extract_appstream():
-    """Checkout the appstream ostree branch to plain files so s3-sync picks them up."""
+    """Checkout the appstream ostree branches to plain files so s3-sync picks them up."""
     import shutil as _shutil
     import tempfile
 
-    appstream_dir = os.path.join(REPO_PATH, "appstream", "x86_64")
-    for branch in ("appstream/x86_64", "appstream2/x86_64"):
-        # Check if the branch exists
-        rev = subprocess.run(
-            ["ostree", "rev-parse", "--repo", REPO_PATH, branch],
-            capture_output=True, text=True,
-        )
-        if rev.returncode != 0:
-            continue
-
-        # Checkout to a temp dir, then copy the relevant files
-        with tempfile.TemporaryDirectory() as tmpdir:
-            co = subprocess.run(
-                ["ostree", "checkout", "--repo", REPO_PATH, "--union", branch, tmpdir],
+    for arch in ARCHES:
+        appstream_dir = os.path.join(REPO_PATH, "appstream", arch)
+        for branch in (f"appstream/{arch}", f"appstream2/{arch}"):
+            rev = subprocess.run(
+                ["ostree", "rev-parse", "--repo", REPO_PATH, branch],
                 capture_output=True, text=True,
             )
-            if co.returncode != 0:
-                print(f"[purge-server] Failed to checkout {branch}: {co.stderr}", file=sys.stderr)
+            if rev.returncode != 0:
                 continue
 
-            # Copy appstream.xml.gz if present
-            for name in ("appstream.xml.gz", "appstream.xml"):
-                src = os.path.join(tmpdir, name)
-                if os.path.isfile(src):
-                    os.makedirs(appstream_dir, exist_ok=True)
-                    _shutil.copy2(src, os.path.join(appstream_dir, name))
-                    print(f"[purge-server] Extracted {name} from {branch}", file=sys.stderr)
+            with tempfile.TemporaryDirectory() as tmpdir:
+                co = subprocess.run(
+                    ["ostree", "checkout", "--repo", REPO_PATH, "--union", branch, tmpdir],
+                    capture_output=True, text=True,
+                )
+                if co.returncode != 0:
+                    print(f"[purge-server] Failed to checkout {branch}: {co.stderr}", file=sys.stderr)
+                    continue
 
-            # Copy icons
-            icons_src = os.path.join(tmpdir, "icons")
-            if os.path.isdir(icons_src):
-                icons_dst = os.path.join(appstream_dir, "icons")
-                # Merge icons (don't delete existing)
-                for root, dirs, files in os.walk(icons_src):
-                    rel = os.path.relpath(root, icons_src)
-                    dst_dir = os.path.join(icons_dst, rel)
-                    os.makedirs(dst_dir, exist_ok=True)
-                    for f in files:
-                        _shutil.copy2(os.path.join(root, f), os.path.join(dst_dir, f))
-                print(f"[purge-server] Extracted icons from {branch}", file=sys.stderr)
+                for name in ("appstream.xml.gz", "appstream.xml"):
+                    src = os.path.join(tmpdir, name)
+                    if os.path.isfile(src):
+                        os.makedirs(appstream_dir, exist_ok=True)
+                        _shutil.copy2(src, os.path.join(appstream_dir, name))
+                        print(f"[purge-server] Extracted {name} from {branch}", file=sys.stderr)
 
-        break  # Only need one successful branch
+                icons_src = os.path.join(tmpdir, "icons")
+                if os.path.isdir(icons_src):
+                    icons_dst = os.path.join(appstream_dir, "icons")
+                    for root, dirs, files in os.walk(icons_src):
+                        rel = os.path.relpath(root, icons_src)
+                        dst_dir = os.path.join(icons_dst, rel)
+                        os.makedirs(dst_dir, exist_ok=True)
+                        for f in files:
+                            _shutil.copy2(os.path.join(root, f), os.path.join(dst_dir, f))
+                    print(f"[purge-server] Extracted icons from {branch}", file=sys.stderr)
+
+            break  # Only need one successful branch per arch
 
 
 class PurgeHandler(http.server.BaseHTTPRequestHandler):

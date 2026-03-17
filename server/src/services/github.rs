@@ -386,44 +386,6 @@ impl GitHubService {
         }
     }
 
-    /// List recent workflow runs to find the run triggered by our dispatch.
-    pub async fn find_latest_run(
-        &self,
-        repo: &str,
-        workflow_file: &str,
-    ) -> Result<Option<WorkflowRun>, AppError> {
-        let url = format!(
-            "https://api.github.com/repos/{}/{repo}/actions/workflows/{workflow_file}/runs?per_page=1",
-            self.org
-        );
-
-        let token = self.get_token().await?;
-        let resp = self
-            .client
-            .get(&url)
-            .header("User-Agent", "friendlyhub-api")
-            .header("Accept", "application/vnd.github+json")
-            .bearer_auth(&token)
-            .send()
-            .await
-            .map_err(|e| AppError::Internal(format!("GitHub API call failed: {e}")))?;
-
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            return Err(AppError::Internal(format!(
-                "GitHub list runs returned {status}: {body}"
-            )));
-        }
-
-        let body: WorkflowRunsResponse = resp
-            .json()
-            .await
-            .map_err(|e| AppError::Internal(format!("Failed to parse GitHub response: {e}")))?;
-
-        Ok(body.workflow_runs.into_iter().next())
-    }
-
     /// Delete a repository from the org.
     pub async fn delete_repo(&self, repo: &str) -> Result<(), AppError> {
         let token = self.get_token().await?;
@@ -602,6 +564,37 @@ impl GitHubService {
         Ok(())
     }
 
+    /// Get a file's raw content from a repo.
+    pub async fn get_file_content(&self, repo: &str, path: &str) -> Result<String, AppError> {
+        let token = self.get_token().await?;
+        let url = format!(
+            "https://api.github.com/repos/{}/{repo}/contents/{path}",
+            self.org
+        );
+
+        let resp = self
+            .client
+            .get(&url)
+            .header("User-Agent", "friendlyhub-api")
+            .header("Accept", "application/vnd.github.raw+json")
+            .bearer_auth(&token)
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("GitHub API call failed: {e}")))?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(AppError::Internal(format!(
+                "GitHub get file returned {status}: {body}"
+            )));
+        }
+
+        resp.text()
+            .await
+            .map_err(|e| AppError::Internal(format!("Failed to read GitHub response: {e}")))
+    }
+
     /// Check if a repository exists in the org.
     pub async fn repo_exists(&self, repo: &str) -> Result<bool, AppError> {
         let token = self.get_token().await?;
@@ -658,20 +651,6 @@ impl GitHubService {
 
         Ok(())
     }
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-pub struct WorkflowRun {
-    pub id: i64,
-    pub html_url: String,
-    pub status: String,
-    pub conclusion: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct WorkflowRunsResponse {
-    workflow_runs: Vec<WorkflowRun>,
 }
 
 #[derive(Debug, Deserialize)]

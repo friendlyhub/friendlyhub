@@ -96,6 +96,7 @@ export const submitApp = (
   manifest: unknown,
   metainfo: string,
   sourceFiles?: Record<string, string>,
+  targetArches?: string[],
 ) =>
   request<{ id: string; status: string; version: string; warnings: string[] }>(
     `/apps/${appId}/submit`,
@@ -108,6 +109,7 @@ export const submitApp = (
         ...(sourceFiles && Object.keys(sourceFiles).length > 0
           ? { source_files: sourceFiles }
           : {}),
+        ...(targetArches ? { target_arches: targetArches } : {}),
       }),
     },
   );

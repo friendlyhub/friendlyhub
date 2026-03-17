@@ -171,6 +171,7 @@ export default function SubmitVersion() {
 
   // === Submission fields ===
   const [sourceFiles, setSourceFiles] = useState<Record<string, string>>({});
+  const [targetArches, setTargetArches] = useState<string>('both');
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Mobile view toggle
@@ -278,7 +279,10 @@ export default function SubmitVersion() {
   const mutation = useMutation({
     mutationFn: () => {
       setSubmitError(null);
-      return submitApp(appId!, version, normalizeManifest(manifest), metainfoText, sourceFiles);
+      const archesForApi = targetArches === 'both'
+        ? ['x86_64', 'aarch64']
+        : [targetArches];
+      return submitApp(appId!, version, normalizeManifest(manifest), metainfoText, sourceFiles, archesForApi);
     },
     onSuccess: (result) => {
       navigate(`/my/submissions/${result.id}`);
@@ -482,12 +486,31 @@ export default function SubmitVersion() {
 
           {/* Beta notice */}
           <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-sm text-amber-700 dark:text-amber-400">
-            <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
             <p>
               The Flatpak manifest &amp; AppStream metainfo editor and validator are in beta
               and provided on a best-effort basis. Your submission may still fail when validated
               during build with flatpak-builder and appstreamcli. You can make changes later
               if this submission fails.
+            </p>
+          </div>
+
+          {/* Target Platforms */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Target Platforms
+            </label>
+            <select
+              value={targetArches}
+              onChange={(e) => setTargetArches(e.target.value)}
+              className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="both">x86_64 + aarch64</option>
+              <option value="x86_64">x86_64 only</option>
+              <option value="aarch64">aarch64 only</option>
+            </select>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Choose which CPU architectures to build for. Most apps should target both.
             </p>
           </div>
 

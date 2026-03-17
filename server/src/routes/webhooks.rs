@@ -30,8 +30,11 @@ pub fn routes() -> Router<AppState> {
 struct BuildCompletePayload {
     submission_id: Uuid,
     result: String,
+    arch: Option<String>,
     fm_build_id: Option<i32>,
     build_log_url: Option<String>,
+    gha_run_id: Option<i64>,
+    gha_run_url: Option<String>,
     download_size: Option<i64>,
     installed_size: Option<i64>,
 }
@@ -214,14 +217,29 @@ async fn webhook_submit(
     )
     .await?;
 
-    // Trigger GHA build (manifest is already in repo from the merged PR)
-    let inputs = serde_json::json!({
-        "submission_id": sub.id.to_string(),
-    });
-    state
-        .github
-        .trigger_build(&payload.app_id, "build.yml", "main", &inputs)
-        .await?;
+    // Resolve arches from friendlyhub.json in the app repo (best-effort)
+    let arches = match state.github.get_file_content(&payload.app_id, "friendlyhub.json").await {
+        Ok(content) => {
+            let source_files = std::collections::HashMap::from([
+                ("friendlyhub.json".to_string(), content),
+            ]);
+            super::submissions::resolve_arches(&[], &source_files)
+        }
+        Err(_) => vec!["x86_64".into(), "aarch64".into()],
+    };
+
+    submission::init_builds(&state.db, sub.id, &arches).await?;
+
+    for arch in &arches {
+        let inputs = serde_json::json!({
+            "submission_id": sub.id.to_string(),
+            "arch": arch,
+        });
+        state
+            .github
+            .trigger_build(&payload.app_id, "build.yml", "main", &inputs)
+            .await?;
+    }
 
     submission::update_status(&state.db, sub.id, "building").await?;
 
@@ -229,7 +247,8 @@ async fn webhook_submit(
         submission_id = %sub.id,
         app_id = %payload.app_id,
         version = %version,
-        "Submission created via webhook, build triggered"
+        arches = ?arches,
+        "Submission created via webhook, builds triggered"
     );
 
     Ok(Json(serde_json::json!({
@@ -383,6 +402,9 @@ async fn pr_submit(
     )
     .await?;
 
+    // Resolve arches from friendlyhub.json in source_files
+    let arches = super::submissions::resolve_arches(&[], &payload.source_files);
+
     // Create repo, push files, add collaborator, trigger build
     if let Err(e) = ensure_repo_and_build(
         &state,
@@ -392,6 +414,7 @@ async fn pr_submit(
         &payload.manifest,
         &payload.metainfo,
         &payload.source_files,
+        &arches,
     )
     .await
     {
@@ -448,15 +471,20 @@ async fn build_complete(
         )));
     }
 
-    match payload.result.as_str() {
-        "success" => {
-            if let Some(fm_id) = payload.fm_build_id {
-                submission::set_fm_build_id(&state.db, sub.id, fm_id).await?;
-            }
-            if let Some(ref log_url) = payload.build_log_url {
-                submission::set_build_log_url(&state.db, sub.id, log_url).await?;
-            }
-            if payload.download_size.is_some() || payload.installed_size.is_some() {
+    if let Some(ref arch) = payload.arch {
+        // Multi-arch path: update per-arch build status
+        let arch_build = submission::ArchBuild {
+            status: if payload.result == "success" { "success".into() } else { "failure".into() },
+            gha_run_id: payload.gha_run_id,
+            gha_run_url: payload.gha_run_url.clone(),
+            fm_build_id: payload.fm_build_id,
+            build_log_url: payload.build_log_url.clone(),
+        };
+        let updated_sub = submission::update_arch_build(&state.db, sub.id, arch, arch_build).await?;
+
+        if payload.result == "success" {
+            // Only update app sizes for x86_64
+            if arch == "x86_64" && (payload.download_size.is_some() || payload.installed_size.is_some()) {
                 app::update_sizes(
                     &state.db,
                     sub.app_id,
@@ -464,41 +492,94 @@ async fn build_complete(
                     payload.installed_size,
                 ).await?;
             }
-            let check_results = checks::run_checks(&sub.manifest);
-            checks::save_results(&state.db, sub.id, &check_results).await?;
-
-            submission::update_status(&state.db, sub.id, "pending_review").await?;
-
-            let checks_passed = checks::all_passed(&check_results);
-            tracing::info!(
-                submission_id = %sub.id,
-                checks_passed = checks_passed,
-                "Build succeeded, ran {} checks, moved to pending_review",
-                check_results.len()
-            );
-            notifications::notify_build_complete(
-                &state.github, &app_record.app_id, &sub.version, true, None,
-            ).await;
         }
-        "failure" => {
-            if let Some(ref log_url) = payload.build_log_url {
-                submission::set_build_log_url(&state.db, sub.id, log_url).await?;
-            }
-            submission::update_status(&state.db, sub.id, "build_failed").await?;
 
-            tracing::info!(
-                submission_id = %sub.id,
-                "Build failed"
-            );
+        if payload.result == "failure" {
+            // Notify per-arch failure immediately
             notifications::notify_build_complete(
                 &state.github, &app_record.app_id, &sub.version, false,
-                payload.build_log_url.as_deref(),
+                payload.build_log_url.as_deref(), Some(arch),
             ).await;
         }
-        other => {
-            return Err(AppError::BadRequest(format!(
-                "Unknown build result: '{other}'. Expected 'success' or 'failure'"
-            )));
+
+        // Check aggregate status
+        if let Some(ref builds) = updated_sub.builds {
+            if submission::all_builds_complete(builds) {
+                if submission::all_builds_succeeded(builds) {
+                    let check_results = checks::run_checks(&sub.manifest);
+                    checks::save_results(&state.db, sub.id, &check_results).await?;
+                    submission::update_status(&state.db, sub.id, "pending_review").await?;
+
+                    tracing::info!(
+                        submission_id = %sub.id,
+                        "All arch builds succeeded, moved to pending_review"
+                    );
+                    notifications::notify_build_complete(
+                        &state.github, &app_record.app_id, &sub.version, true, None, None,
+                    ).await;
+                } else {
+                    submission::update_status(&state.db, sub.id, "build_failed").await?;
+                    tracing::info!(
+                        submission_id = %sub.id,
+                        "One or more arch builds failed"
+                    );
+                }
+            }
+        }
+    } else {
+        // Legacy single-arch path (for in-flight old submissions)
+        match payload.result.as_str() {
+            "success" => {
+                if let Some(fm_id) = payload.fm_build_id {
+                    submission::set_fm_build_id(&state.db, sub.id, fm_id).await?;
+                }
+                if let Some(ref log_url) = payload.build_log_url {
+                    submission::set_build_log_url(&state.db, sub.id, log_url).await?;
+                }
+                if payload.download_size.is_some() || payload.installed_size.is_some() {
+                    app::update_sizes(
+                        &state.db,
+                        sub.app_id,
+                        payload.download_size,
+                        payload.installed_size,
+                    ).await?;
+                }
+                let check_results = checks::run_checks(&sub.manifest);
+                checks::save_results(&state.db, sub.id, &check_results).await?;
+
+                submission::update_status(&state.db, sub.id, "pending_review").await?;
+
+                let checks_passed = checks::all_passed(&check_results);
+                tracing::info!(
+                    submission_id = %sub.id,
+                    checks_passed = checks_passed,
+                    "Build succeeded, ran {} checks, moved to pending_review",
+                    check_results.len()
+                );
+                notifications::notify_build_complete(
+                    &state.github, &app_record.app_id, &sub.version, true, None, None,
+                ).await;
+            }
+            "failure" => {
+                if let Some(ref log_url) = payload.build_log_url {
+                    submission::set_build_log_url(&state.db, sub.id, log_url).await?;
+                }
+                submission::update_status(&state.db, sub.id, "build_failed").await?;
+
+                tracing::info!(
+                    submission_id = %sub.id,
+                    "Build failed"
+                );
+                notifications::notify_build_complete(
+                    &state.github, &app_record.app_id, &sub.version, false,
+                    payload.build_log_url.as_deref(), None,
+                ).await;
+            }
+            other => {
+                return Err(AppError::BadRequest(format!(
+                    "Unknown build result: '{other}'. Expected 'success' or 'failure'"
+                )));
+            }
         }
     }
 

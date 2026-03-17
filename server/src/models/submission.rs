@@ -8,6 +8,15 @@ use super::helpers;
 use crate::db::Db;
 use crate::errors::AppError;
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ArchBuild {
+    pub status: String,
+    pub gha_run_id: Option<i64>,
+    pub gha_run_url: Option<String>,
+    pub fm_build_id: Option<i32>,
+    pub build_log_url: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Submission {
     pub id: Uuid,
@@ -22,6 +31,7 @@ pub struct Submission {
     pub gha_run_url: Option<String>,
     pub fm_build_id: Option<i32>,
     pub build_log_url: Option<String>,
+    pub builds: Option<HashMap<String, ArchBuild>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -81,6 +91,11 @@ impl Submission {
         if let Some(ref url) = self.build_log_url {
             item.insert("build_log_url".into(), AttributeValue::S(url.clone()));
         }
+        if let Some(ref builds) = self.builds {
+            if let Ok(json) = serde_json::to_string(builds) {
+                item.insert("builds".into(), AttributeValue::S(json));
+            }
+        }
         item.insert("created_at".into(), AttributeValue::S(self.created_at.to_rfc3339()));
         item.insert("updated_at".into(), AttributeValue::S(self.updated_at.to_rfc3339()));
         item.insert("entity_type".into(), AttributeValue::S("Submission".into()));
@@ -101,6 +116,8 @@ impl Submission {
             gha_run_url: helpers::get_string_opt(item, "gha_run_url"),
             fm_build_id: helpers::get_i32_opt(item, "fm_build_id"),
             build_log_url: helpers::get_string_opt(item, "build_log_url"),
+            builds: helpers::get_json_opt(item, "builds")
+                .and_then(|v| serde_json::from_value(v).ok()),
             created_at: helpers::get_datetime(item, "created_at")?,
             updated_at: helpers::get_datetime(item, "updated_at")?,
         })
@@ -129,6 +146,7 @@ pub async fn create(
         gha_run_url: None,
         fm_build_id: None,
         build_log_url: None,
+        builds: None,
         created_at: now,
         updated_at: now,
     };
@@ -233,16 +251,6 @@ pub async fn update_status(db: &Db, id: Uuid, new_status: &str) -> Result<Submis
     Ok(sub)
 }
 
-pub async fn set_build_info(db: &Db, id: Uuid, gha_run_id: i64, gha_run_url: &str) -> Result<(), AppError> {
-    let mut sub = find_by_id(db, id)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Submission not found".into()))?;
-    sub.gha_run_id = Some(gha_run_id);
-    sub.gha_run_url = Some(gha_run_url.to_string());
-    sub.status = "building".to_string();
-    sub.updated_at = Utc::now();
-    save(db, &sub).await
-}
 
 pub async fn set_fm_build_id(db: &Db, id: Uuid, fm_build_id: i32) -> Result<(), AppError> {
     let mut sub = find_by_id(db, id)
@@ -273,6 +281,41 @@ pub async fn set_build_log_url(db: &Db, id: Uuid, url: &str) -> Result<(), AppEr
     sub.build_log_url = Some(url.to_string());
     sub.updated_at = Utc::now();
     save(db, &sub).await
+}
+
+pub async fn init_builds(db: &Db, id: Uuid, arches: &[String]) -> Result<(), AppError> {
+    let mut sub = find_by_id(db, id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Submission not found".into()))?;
+    let mut builds = HashMap::new();
+    for arch in arches {
+        builds.insert(arch.clone(), ArchBuild {
+            status: "pending".to_string(),
+            ..Default::default()
+        });
+    }
+    sub.builds = Some(builds);
+    sub.updated_at = Utc::now();
+    save(db, &sub).await
+}
+
+pub async fn update_arch_build(db: &Db, id: Uuid, arch: &str, update: ArchBuild) -> Result<Submission, AppError> {
+    let mut sub = find_by_id(db, id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Submission not found".into()))?;
+    let builds = sub.builds.get_or_insert_with(HashMap::new);
+    builds.insert(arch.to_string(), update);
+    sub.updated_at = Utc::now();
+    save(db, &sub).await?;
+    Ok(sub)
+}
+
+pub fn all_builds_complete(builds: &HashMap<String, ArchBuild>) -> bool {
+    builds.values().all(|b| b.status == "success" || b.status == "failure")
+}
+
+pub fn all_builds_succeeded(builds: &HashMap<String, ArchBuild>) -> bool {
+    builds.values().all(|b| b.status == "success")
 }
 
 #[cfg(test)]

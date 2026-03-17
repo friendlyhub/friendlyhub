@@ -6,7 +6,13 @@ pub async fn notify_build_complete(
     version: &str,
     success: bool,
     build_log_url: Option<&str>,
+    arch: Option<&str>,
 ) {
+    let arch_suffix = match arch {
+        Some(a) => format!(" ({a})"),
+        None => String::new(),
+    };
+
     let (title, body, label) = if success {
         (
             format!("v{version} build succeeded"),
@@ -22,9 +28,9 @@ pub async fn notify_build_complete(
             None => String::new(),
         };
         (
-            format!("v{version} build failed"),
+            format!("v{version} build failed{arch_suffix}"),
             format!(
-                "**{app_id}** v{version} failed to build.{log_line}\n\n\
+                "**{app_id}** v{version} failed to build{arch_suffix}.{log_line}\n\n\
                  Please fix the issue and submit a new version."
             ),
             "build-failed",

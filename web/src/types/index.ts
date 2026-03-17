@@ -67,6 +67,14 @@ export interface CreateAppResponse extends App {
   verification: VerificationInfo | null;
 }
 
+export interface ArchBuild {
+  status: string;
+  gha_run_id?: number;
+  gha_run_url?: string;
+  fm_build_id?: number;
+  build_log_url?: string;
+}
+
 export interface Submission {
   id: string;
   app_id: string;
@@ -80,6 +88,7 @@ export interface Submission {
   gha_run_url: string | null;
   fm_build_id: number | null;
   build_log_url: string | null;
+  builds?: Record<string, ArchBuild>;
   created_at: string;
   updated_at: string;
 }
