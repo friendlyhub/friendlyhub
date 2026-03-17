@@ -170,6 +170,7 @@ pub async fn find_by_id(db: &Db, id: Uuid) -> Result<Option<Submission>, AppErro
         .table_name(&db.table)
         .key("PK", AttributeValue::S(key.clone()))
         .key("SK", AttributeValue::S(key))
+        .consistent_read(true)
         .send()
         .await
         .map_err(|e| AppError::Internal(format!("DynamoDB get_item failed: {e}")))?;

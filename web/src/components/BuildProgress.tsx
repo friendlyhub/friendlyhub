@@ -78,8 +78,9 @@ export default function BuildProgress({ appId, runId, runUrl, isBuilding }: Prop
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['ghaBuildProgress', appId, runId],
     queryFn: () => fetchGitHubJobs(appId, runId),
-    refetchInterval: isBuilding ? 10_000 : false,
-    staleTime: isBuilding ? 5_000 : 60_000,
+    refetchInterval: isBuilding ? 5_000 : false,
+    refetchOnWindowFocus: isBuilding ? 'always' : false,
+    staleTime: isBuilding ? 3_000 : 60_000,
   });
 
   // When build finishes (isBuilding flips false), do one final refetch so the

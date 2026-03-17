@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
-import { CheckCircle, MessageSquare, ExternalLink, Eye, EyeOff } from 'lucide-react';
+import { CheckCircle, MessageSquare, ExternalLink, Eye, EyeOff, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
 import json from 'react-syntax-highlighter/dist/esm/languages/hljs/json';
@@ -45,7 +45,11 @@ export default function SubmissionDetail({ reviewMode = false }: Props) {
     enabled: !!id,
     refetchInterval: (query) => {
       const status = query.state.data?.submission?.status;
-      return status === 'building' || status === 'pending_build' ? 10_000 : false;
+      return status === 'building' || status === 'pending_build' ? 5_000 : false;
+    },
+    refetchOnWindowFocus: (query) => {
+      const status = query.state.data?.submission?.status;
+      return status === 'building' || status === 'pending_build' ? 'always' : false;
     },
   });
 
@@ -206,14 +210,19 @@ export default function SubmissionDetail({ reviewMode = false }: Props) {
                     </a>
                   )}
                 </div>
-                {build.gha_run_id && appInfo?.app_id && (
+                {build.gha_run_id && appInfo?.app_id ? (
                   <BuildProgress
                     appId={appInfo.app_id}
                     runId={build.gha_run_id}
                     runUrl={build.gha_run_url}
                     isBuilding={build.status === 'building' || build.status === 'pending'}
                   />
-                )}
+                ) : build.status === 'pending' ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Waiting for build runner...
+                  </div>
+                ) : null}
                 {build.fm_build_id && (
                   <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                     flat-manager build #{build.fm_build_id}

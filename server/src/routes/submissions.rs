@@ -193,6 +193,20 @@ async fn get_submission(
         return Err(AppError::Forbidden);
     }
 
+    if sub.status == "building" || sub.status == "pending_build" {
+        let arch_summary: Vec<String> = sub.builds.as_ref()
+            .map(|b| b.iter().map(|(arch, ab)| {
+                format!("{}:status={},gha_run_id={:?}", arch, ab.status, ab.gha_run_id)
+            }).collect())
+            .unwrap_or_default();
+        tracing::info!(
+            submission_id = %id,
+            status = %sub.status,
+            builds = ?arch_summary,
+            "Submission polled during build"
+        );
+    }
+
     // Fetch reviews with reviewer names
     let reviews = review::list_by_submission(&state.db, id).await?;
     let mut enriched_reviews = Vec::new();
