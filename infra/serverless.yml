@@ -415,6 +415,27 @@ resources:
                 StringEquals:
                   AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${OstreeRepoCDN}"
 
+    SPASubdirIndexFunction:
+      Type: AWS::CloudFront::Function
+      Properties:
+        Name: friendlyhub-spa-subdir-index-${self:provider.stage}
+        AutoPublish: true
+        FunctionCode: |
+          function handler(event) {
+            var uri = event.request.uri;
+            if (uri === '/docs') {
+              event.request.uri = '/docs/index.html';
+            } else if (uri.endsWith('/')) {
+              event.request.uri = uri + 'index.html';
+            } else if (uri.startsWith('/docs/') && !uri.includes('.')) {
+              event.request.uri = uri + '.html';
+            }
+            return event.request;
+          }
+        FunctionConfig:
+          Comment: Rewrite /docs/ subpaths to index.html for VitePress
+          Runtime: cloudfront-js-2.0
+
     FlatpakrefContentTypeFunction:
       Type: AWS::CloudFront::Function
       Properties:
@@ -540,6 +561,9 @@ resources:
             CachedMethods:
               - GET
               - HEAD
+            FunctionAssociations:
+              - EventType: viewer-request
+                FunctionARN: !GetAtt SPASubdirIndexFunction.FunctionARN
           CacheBehaviors:
             - PathPattern: /api/*
               TargetOriginId: api-gateway
