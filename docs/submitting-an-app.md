@@ -59,6 +59,23 @@ If your build requires additional source files (patches, data files, etc.), you 
 
 ![Submitting additional source files](/images/developer_submit_sourcefiles.png)
 
+### Target Platforms
+
+Below the source files section, you can choose which CPU architectures to build for:
+
+| Option | What it does |
+|---|---|
+| **x86_64 + aarch64** (default) | Builds for both Intel/AMD and ARM devices |
+| **x86_64 only** | Builds only for Intel/AMD (64-bit) |
+| **aarch64 only** | Builds only for ARM (64-bit) |
+
+Most apps should target both architectures. Choose a single architecture only if your app bundles architecture-specific binaries that aren't available for both platforms (e.g. a proprietary x86_64-only library).
+
+If your app builds from source and doesn't depend on architecture-specific binaries, it will almost certainly build on both architectures without any changes.
+
+> [!TIP]
+> If your Flatpak manifest has modules that need different sources per architecture (e.g. downloading different tarballs for x86_64 and aarch64), you can use the `only-arches` and `skip-arches` fields at the module or source level in your manifest. See the [flatpak-builder documentation](https://docs.flatpak.org/en/latest/flatpak-builder-command-reference.html) for details.
+
 ### AppStream Metainfo
 
 Similarly, the metainfo section has both a form view and a code editor. Your metainfo file should include:
@@ -85,13 +102,13 @@ Warnings don't block your submission, but failures do. You'll see detailed feedb
 
 ## Step 4: Build
 
-After automated checks pass, FriendlyHub creates a GitHub repository for your app under the `friendlyhub` organisation and triggers a build via GitHub Actions. The build process:
+After automated checks pass, FriendlyHub creates a GitHub repository for your app under the `friendlyhub` organisation and triggers a build via GitHub Actions. If you selected multiple target platforms, a separate build runs for each architecture. The build process (per architecture):
 
-1. Runs `flatpak-builder` with your manifest inside a container
+1. Runs `flatpak-builder` with your manifest inside a native container for that architecture
 2. Uploads the built Flatpak to flat-manager
 3. Notifies the FriendlyHub API that the build is complete
 
-You can follow the build progress in real-time from your submission's detail page. Builds typically take around 10-15 minutes depending on your app's dependencies.
+You can follow the build progress for each architecture in real-time from your submission's detail page. Builds typically take around 10-15 minutes depending on your app's dependencies. Your submission moves to **pending review** only when all architecture builds have succeeded.
 
 ![Build starting](/images/developer_build_start.png)
 

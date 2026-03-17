@@ -1,271 +1,786 @@
-# PR-Based App Submission
+# Multi-Architecture Build Support (x86_64 + aarch64)
 
-Two paths for submitting apps via GitHub PRs. No web registration required.
+## Current State
 
-## Path 1: New App — via `friendlyhub/submissions` repo
+Today, FriendlyHub only builds for x86_64. This is baked in at every layer:
 
-For first-time submissions. Developer forks the central submissions repo, adds their app, and opens a PR.
+- **Builder image** (`builder-image/Dockerfile`): `FROM fedora:43` on x86_64, pre-caches x86_64-only runtimes
+- **Build script** (`builder-image/build.sh`): runs `flatpak-builder` with no `--arch` flag (defaults to host arch)
+- **Build workflow** (`build-templates/build.yml`): `runs-on: ubuntu-latest` (x86_64), single job, no matrix
+- **Submission model** (`server/src/models/submission.rs`): one `gha_run_id`, one `fm_build_id`, one `build_log_url` per submission -- no concept of per-arch builds
+- **Build trigger** (`server/src/routes/submissions.rs:ensure_repo_and_build`): dispatches one workflow run, records one run ID
+- **Build-complete webhook** (`server/src/routes/webhooks.rs:build_complete`): expects one result per submission, transitions straight to `pending_review`
+- **Appstream** (`server/src/services/appstream.rs`): hardcoded `repo/appstream/x86_64/appstream.xml.gz`
+- **Icon URLs** (`server/src/routes/internal.rs`): hardcoded `repo/appstream/x86_64/icons/128x128/`
+- **Purge server** (`deploy/flat-manager/purge-server.py:extract_appstream`): hardcoded `appstream/x86_64`
+- **flat-manager config** (`deploy/flat-manager/entrypoint.sh`): single OSTree repo, no arch-specific config
+- **Builder image CI** (`.github/workflows/builder-image.yml`): single-platform Docker build
 
-### Repo structure
+The key insight: OSTree and flat-manager are already multi-arch capable. The refs are `app/{app_id}/{arch}/{branch}` -- both arches land in the same repo. The problem is purely in our build pipeline and submission tracking.
 
-```
-friendlyhub/submissions/
-  org.example.MyApp/
-    org.example.MyApp.json            # Flatpak manifest (or .yaml/.yml)
-    org.example.MyApp.metainfo.xml    # AppStream metainfo (must have <release>)
-    cargo-sources.json                # Optional companion files (JSON only)
-```
+---
 
-### Manifest requirements
+## Architecture Selection
 
-- The manifest must reference the app's **upstream source repo** via `type: git` (not `type: dir`)
-- Companion source files (e.g. `cargo-sources.json` for Rust apps) should be included in the submission directory alongside the manifest
-- The manifest should reference companion files in its `sources` array (e.g. `"cargo-sources.json"`)
-- The **metainfo file does NOT need to be in the upstream repo** — the API automatically injects it as a `{"type": "file", "path": "{app-id}.metainfo.xml"}` source into the manifest when pushing to the app repo, so flatpak-builder can find it during build
-- The manifest's `build-commands` can include `install -Dm644 {app-id}.metainfo.xml ...` to install the metainfo into the Flatpak — it will be present in the build directory
+### How developers choose target architectures
 
-### Flow
+Neither the Flatpak manifest nor AppStream metainfo have a top-level field for specifying target CPU architectures. The ecosystem convention (established by Flathub) is a separate config file at the repo root.
 
-1. Fork `friendlyhub/submissions`
-2. Create a directory named with your app ID (reverse-DNS format, e.g. `org.example.MyApp`)
-3. Add manifest + metainfo (and optional companion JSON files) to the directory
-4. Open PR to `main`
+FriendlyHub adopts the same convention with `friendlyhub.json`:
 
-**On PR open/update** (`pr-check.yml`, trigger: `pull_request_target` + `issue_comment`):
-- Uses `pull_request_target` to access org secrets from fork PRs (safe: workflow file comes from base branch)
-- Validates exactly one app directory changed
-- Validates directory name is reverse-DNS format
-- Validates manifest via `POST /api/v1/manifests/validate`
-- Validates metainfo via `POST /api/v1/webhooks/validate-metainfo`
-- Checks that metainfo has at least one `<release>` with a version
-- Checks domain verification via `POST /api/v1/webhooks/check-verification` (non-blocking)
-- If domain is unverified, auto-comments on the PR with verification instructions
-- If domain becomes verified on re-check, removes the verification comment and posts a success message
-- Developer can comment `/recheck` on the PR to re-trigger validation without pushing a new commit
-
-**On merge** (`on-merge.yml`):
-- Detects changed directory (filters out hidden dirs like `.github`)
-- Reads manifest + metainfo + companion files
-- Determines PR author via GitHub `/commits/{sha}/pulls` API (with fallbacks to `gh pr list` search and commit author API)
-- Calls `POST /api/v1/webhooks/pr-submit` with full payload
-
-**Server-side** (`pr-submit` handler):
-1. Validates manifest and metainfo
-2. Extracts version from latest `<release>` tag in metainfo (rejects if none)
-3. Verifies metainfo `<id>` matches the app_id directory name
-4. Resolves GitHub username to user record (auto-creates via `GET /users/{username}` API if needed)
-5. Creates app record (owner = PR author, `developer_type: "original"`)
-6. Attempts domain verification (see Domain Verification section below)
-7. Updates app metadata from metainfo (summary, description, etc.)
-8. Creates `friendlyhub/{app-id}` repo on GitHub
-9. Automatically injects metainfo as a file source into the manifest (if not already present)
-10. Pushes manifest, metainfo, companion files, and CI workflows to the repo
-11. Adds PR author as **triage** collaborator on the app repo
-12. Creates submission record, triggers build (with retry on 404 for newly-pushed workflow files)
-
-### After submission
-
-- Build runs via GHA on `friendlyhub/{app-id}`
-- On success: automated checks run, submission enters review queue
-- Reviewer approves or requests changes
-- On approval: app published to the FriendlyHub repository
-- Developer can log into friendlyhub.org with GitHub — their app appears under "My Apps" (linked by GitHub ID)
-
-## Path 2: App Updates — via per-app repo
-
-For subsequent versions. Developer has triage access on `friendlyhub/{app-id}` and submits PRs from a fork.
-
-### Repo structure
-
-```
-friendlyhub/{app-id}/
-  {app-id}.json (or .yaml/.yml)     # Flatpak manifest
-  {app-id}.metainfo.xml              # AppStream metainfo
-  cargo-sources.json                 # Optional companion files
-  .github/workflows/
-    build.yml                        # Managed by API
-    pr-check.yml                     # Managed by API
+```json
+{ "only-arches": ["x86_64"] }
 ```
 
-Workflows are managed by the API. Developers should not edit them.
+or equivalently:
 
-### Flow
-
-1. Fork `friendlyhub/{app-id}`
-2. Update manifest and/or metainfo (add new `<release>` tag)
-3. Open PR to `main`
-
-**On PR open/update** (`pr-check.yml`):
-- Validates manifest via `POST /api/v1/manifests/validate`
-
-**On merge** (`pr-check.yml`, push-to-main trigger):
-- Skips if commit message contains `[friendlyhub-api]` (avoids double-trigger on API-pushed commits)
-- Extracts version from metainfo `<release>` tags (falls back to commit message regex, then `0.0.0-{sha7}`)
-- Sends metainfo in webhook payload if present
-- Calls `POST /api/v1/webhooks/submit`
-- Triggers `build.yml`
-
-**Server-side** (`webhook_submit` handler):
-1. Validates manifest
-2. Extracts version from metainfo if provided (falls back to payload version)
-3. Creates submission record
-4. Triggers GHA build
-
-### Build pipeline
-
-Same for both paths:
-1. `flatpak-builder` inside `ghcr.io/friendlyhub/flatpak-builder:latest`
-2. Creates flat-manager build, uploads repo, commits
-3. Polls until success or failure
-4. Webhooks back to `POST /api/v1/webhooks/build-complete`
-5. On success: automated checks, submission -> `pending_review`
-6. On failure: submission -> `build_failed`, developer checks GHA logs
-
-## Domain Verification
-
-Two verification strategies depending on the app ID format:
-
-### Forge-based IDs (e.g. `io.github.username.AppName`)
-
-- **At PR check time**: `check-verification` endpoint compares the GitHub username in the app ID against the PR author. Returns verified/unverified immediately.
-- **At merge time**: `pr_submit` auto-verifies the app if the PR author's GitHub username matches the forge username component. No action needed from the developer.
-- Org-based forge IDs (e.g. `io.github.myorg.AppName`): currently requires the PR author to match the org name. TODO: check org ownership via bot token.
-
-### Custom domain IDs (e.g. `com.example.MyApp`)
-
-- **At PR check time**: `check-verification` endpoint upserts the user, creates/gets a verification token for the domain, and checks the well-known URL. If unverified, returns the token so the workflow can comment on the PR with instructions.
-- **PR comment**: Bot auto-comments with the domain, token, and well-known URL. Developer places the token at `https://example.com/.well-known/org.friendlyhub.VerifiedApps.txt`. Developer can comment `/recheck` to re-trigger validation. On successful verification, the comment is removed and replaced with "Domain verified successfully."
-- **At merge time**: `pr_submit` checks the well-known URL again. If the token is found, the app is auto-verified. If not, the app is created as unverified — developer can verify later via the web dashboard.
-- **Non-blocking**: Verification never blocks the PR or the merge. Unverified apps still build and enter review, but show as unverified on the website.
-
-### Verification via web (fallback)
-
-If domain verification wasn't completed during the PR flow, the developer can log into friendlyhub.org and verify from the web dashboard (same token-based flow).
-
-## Version extraction
-
-Version comes from the latest `<release>` tag in metainfo:
-
-```xml
-<releases>
-  <release version="1.2.0" date="2026-03-12"/>
-  <release version="1.1.0" date="2026-02-01"/>
-</releases>
+```json
+{ "skip-arches": ["aarch64"] }
 ```
 
-This extracts `1.2.0`. Metainfo must have at least one `<release>` for new submissions.
+Rules:
+- **No file** = build for all supported arches (x86_64 + aarch64)
+- `only-arches` = build only for the listed arches
+- `skip-arches` = build for all arches except the listed ones
+- Both fields cannot be present simultaneously
 
-For per-app repo updates, fallback chain: metainfo release -> commit message regex (`v?\d+\.\d+[\.\d]*`) -> `0.0.0-{sha7}`.
+This is intentionally compatible with Flathub's `flathub.json` format so developers migrating from Flathub don't have to learn a new convention.
 
-## API endpoints
+Note: per-module `only-arches` / `skip-arches` in the Flatpak manifest itself still work as expected for conditional module compilation (e.g. fetching different binaries per arch).
 
-| Endpoint | Auth | Purpose |
-|----------|------|---------|
-| `POST /api/v1/webhooks/pr-submit` | webhook secret | New app from submissions repo merge |
-| `POST /api/v1/webhooks/submit` | webhook secret | Update from per-app repo merge |
-| `POST /api/v1/webhooks/check-verification` | webhook secret | Check domain verification, return token if unverified |
-| `POST /api/v1/webhooks/validate-metainfo` | webhook secret | Validate metainfo XML (returns version, app_id) |
-| `POST /api/v1/manifests/validate` | webhook secret | Validate Flatpak manifest |
-| `POST /api/v1/webhooks/build-complete` | webhook secret | GHA build result callback |
+### Web submission UI
 
-## Collaborator access
-
-Both web and PR submissions grant the app owner **triage** access on `friendlyhub/{app-id}`. This gives:
-- Read access to code
-- Create/manage issues and PRs (via fork, since repos are public)
-- No direct push access
-
-Added in `ensure_repo_and_build` (shared by both submission paths). Best-effort — failure to add collaborator doesn't block the submission.
-
-## Secrets
-
-Org-level GitHub Actions secrets (visibility: ALL repos):
-- `FRIENDLYHUB_API_URL` — API base URL
-- `WEBHOOK_SECRET` — shared secret for webhook auth
-- `FLAT_MANAGER_TOKEN` — flat-manager auth token (used by build.yml)
-
-## Key differences between paths
-
-| Aspect | Submissions repo (new app) | Per-app repo (update) | Web UI |
-|--------|----------------------------|----------------------|--------|
-| Creates user/app records | Yes (auto) | No (must exist) | Yes (manual) |
-| Creates GitHub repo | Yes | No (already exists) | Yes |
-| Metainfo required | Yes | Optional (but recommended) | Yes |
-| Metainfo location | Submission dir (API injects into manifest as file source) | App repo (already present) | Uploaded via form |
-| Version source | Metainfo only | Metainfo -> commit msg -> sha | Metainfo |
-| Companion files | Sent in webhook payload | Already in repo | Uploaded via form |
-| Collaborator added | Yes | Already added | Yes |
-| Domain verification | Auto (forge) or token via PR comment (domain) | N/A (already verified or not) | Auto (forge) or token via web UI (domain) |
-| Verification blocking | No | N/A | No (app created either way) |
-
-## Implementation notes
-
-### Workflow triggers
-
-- **`pr-check.yml` in submissions repo** uses `pull_request_target` (not `pull_request`) because fork PRs on public repos don't receive secrets with the `pull_request` trigger. The `pull_request_target` trigger runs the workflow from the base branch with full secret access. This is safe because the workflow file itself comes from main — it only reads data files from the PR head.
-- **`issue_comment` trigger** on the same workflow allows `/recheck` comments to re-trigger validation without new commits.
-- **`on-merge.yml`** filters out hidden directories (e.g. `.github`) from changed directory detection to avoid false positives on workflow-only commits.
-
-### PR author detection
-
-The `on-merge.yml` workflow determines the PR author using a cascade:
-1. GitHub `/commits/{sha}/pulls` API (most reliable)
-2. `gh pr list --state merged --search "$SHA"` (backup)
-3. GitHub `/commits/{sha}` API for `.author.login` (last resort)
-
-The display name from `git log` is NOT used because it doesn't correspond to a GitHub login.
-
-### Workflow dispatch retry
-
-`trigger_build` in `github.rs` retries on 404 up to 3 times with increasing backoff (5s, 10s, 15s). This handles the race condition where GitHub hasn't indexed a newly-pushed workflow file yet.
-
-### Metainfo injection
-
-`ensure_repo_and_build` in `submissions.rs` automatically adds `{"type": "file", "path": "{app-id}.metainfo.xml"}` to each module's sources in the manifest before pushing to the app repo. This means the metainfo file (which lives alongside the manifest in the app repo) is available to flatpak-builder during the build, without requiring it to exist in the upstream source repo. The injection is skipped if the source is already present.
-
-## Testing with dummyapp
-
-Test app: `org.friendlyhub.DummyApp`
-Upstream source repo: `github.com/icemaltacode/dummyapp` (tag `v0.1.0`)
-
-### Local reference files
-
-The `dummyapp/` directory in this repo (gitignored) has all the files for reference:
-- `org.friendlyhub.DummyApp.yml` — Flatpak manifest
-- `org.friendlyhub.DummyApp.metainfo.xml` — AppStream metainfo
-- `cargo-sources.json` — Vendored Rust crate sources (generated via `flatpak-cargo-generator Cargo.lock`)
-- `org.friendlyhub.DummyApp.desktop` — Desktop entry (referenced by manifest, lives in upstream source repo)
-- `org.friendlyhub.DummyApp.svg` — Icon (referenced by manifest, lives in upstream source repo)
-- `src/main.rs` + `Cargo.toml` — The actual GTK4 Rust app (lives in upstream source repo)
-
-### What goes in the forked submissions repo
-
-When submitting via PR, the fork needs a single directory named after the app ID containing:
+The `SubmitVersion` page (`web/src/pages/SubmitVersion.tsx`) gains a **Target Platforms** dropdown in the submission area (between the source files section and the submit button):
 
 ```
-org.friendlyhub.DummyApp/
-  org.friendlyhub.DummyApp.yml          # Flatpak manifest (required, .json/.yaml/.yml)
-  org.friendlyhub.DummyApp.metainfo.xml # AppStream metainfo (required, must be named {app-id}.metainfo.xml)
-  cargo-sources.json                     # Companion source files (any .json that isn't the manifest)
+Target Platforms:  [x86_64 + aarch64  v]
+                   [x86_64 + aarch64   ]
+                   [x86_64 only        ]
+                   [aarch64 only       ]
 ```
 
-Only these three types of file matter:
-1. **Manifest** (required) — detected by scanning for a `.json`/`.yaml`/`.yml` file containing `app-id` or `id`
-2. **Metainfo** (required) — must be named exactly `{app-id}/{app-id}.metainfo.xml`
-3. **Companion JSON files** (optional) — any other `.json` files in the directory (e.g. `cargo-sources.json`). These get sent to the API as `source_files` and pushed to the app repo.
+Implementation:
+- New state: `const [targetArches, setTargetArches] = useState<string>('both')`
+- Values: `'both'` | `'x86_64'` | `'aarch64'`
+- The dropdown renders as a `<select>` with Tailwind styling consistent with the rest of the form
+- The selected value is passed in the submission API call as `target_arches: string[]`
+- The server uses this to determine which arches to build for (instead of reading `friendlyhub.json` from the repo)
 
-Non-JSON files like `.desktop`, `.svg`, or source code are NOT collected by the workflow. Those must live in the upstream source repo and be referenced in the manifest as git sources.
+The `submitApp` function (`web/src/api/client.ts`) gains a `targetArches` parameter:
 
-### Test steps
+```typescript
+export const submitApp = (
+  appId: string,
+  version: string,
+  manifest: unknown,
+  metainfo: string,
+  sourceFiles?: Record<string, string>,
+  targetArches?: string[],
+) => ...
+```
 
-1. Fork `friendlyhub/submissions`
-2. Create `org.friendlyhub.DummyApp/` and add the manifest, metainfo, and cargo-sources.json from `dummyapp/`
-3. Open PR against `friendlyhub/submissions` main branch
-4. Verify `pr-check` runs: manifest validated, metainfo validated, verification check runs
-5. If custom domain: verification comment appears with well-known token instructions. Comment `/recheck` after placing the token.
-6. Merge the PR
-7. Verify `on-merge` runs: submission created, app repo created at `friendlyhub/org.friendlyhub.DummyApp`, build triggered
-8. Verify PR author gets triage collaborator invite on the app repo
-9. Verify forge-based IDs (io.github.*, etc.) are auto-verified; custom domains stay unverified unless token was placed
-10. Wait for build to complete (~13 mins), then verify submission appears in review queue
-11. Log into friendlyhub.org as the PR author — app appears under "My Apps"
+The server-side `SubmitRequest` (`server/src/routes/submissions.rs`) gains:
+
+```rust
+struct SubmitRequest {
+    // ... existing fields ...
+    #[serde(default)]
+    target_arches: Vec<String>,
+}
+```
+
+When `target_arches` is empty (backward compat), default to `["x86_64", "aarch64"]`.
+
+The server writes a `friendlyhub.json` to the app repo alongside the manifest, so that PR-based rebuilds also respect the arch selection.
+
+### PR submission flow
+
+For PR submissions (`friendlyhub/submissions` repo), the developer includes a `friendlyhub.json` in their app directory:
+
+```
+org.example.MyApp/
+  org.example.MyApp.yaml
+  org.example.MyApp.metainfo.xml
+  friendlyhub.json              # optional
+```
+
+The PR check workflow validates it. The `pr_submit` handler reads it from `source_files` and passes the arches through to `ensure_repo_and_build`.
+
+If no `friendlyhub.json` is present, builds for all supported arches.
+
+### Server-side arch resolution
+
+`ensure_repo_and_build` determines the arch list:
+
+```rust
+fn resolve_arches(target_arches: &[String], source_files: &HashMap<String, String>) -> Vec<String> {
+    // 1. If target_arches is non-empty (web submission), use that
+    if !target_arches.is_empty() {
+        return target_arches.clone();
+    }
+
+    // 2. Check for friendlyhub.json in source_files (PR submission)
+    if let Some(config) = source_files.get("friendlyhub.json") {
+        if let Ok(parsed) = serde_json::from_str::<FriendlyHubConfig>(config) {
+            if let Some(only) = parsed.only_arches {
+                return only;
+            }
+            if let Some(skip) = parsed.skip_arches {
+                let all = vec!["x86_64".into(), "aarch64".into()];
+                return all.into_iter().filter(|a| !skip.contains(a)).collect();
+            }
+        }
+    }
+
+    // 3. Default: all arches
+    vec!["x86_64".into(), "aarch64".into()]
+}
+```
+
+### App model: persisting arch selection
+
+The App record in DynamoDB gains a `target_arches` field (string list). Set on first submission, updated on subsequent submissions if the developer changes their selection. This is used for display purposes (showing which platforms an app is available for on the app detail page) and for re-triggering builds.
+
+---
+
+## Design Decision: Two GHA Runs per Submission
+
+Each submission triggers **one or two independent GitHub Actions workflow runs** depending on the arch selection. Not a matrix build, because:
+
+1. GitHub's ARM runners are separate (`ubuntu-24.04-arm`) and may have different availability
+2. Independent runs mean one arch failing doesn't block the other
+3. Each run uses a different builder image tag (`:x86_64` vs `:aarch64`)
+4. We need separate build logs and status tracking per arch
+
+The submission moves to `pending_review` only when **all** builds for the selected arches succeed, or to `build_failed` if **any** fails.
+
+---
+
+## Data Model Changes
+
+### New fields on Submission (DynamoDB)
+
+Replace the single-build fields with per-arch fields:
+
+```
+# Remove (or keep as legacy, null for new submissions):
+gha_run_id        -> REMOVED
+gha_run_url       -> REMOVED
+fm_build_id       -> REMOVED
+build_log_url     -> REMOVED
+
+# Add:
+builds: {
+  "x86_64": {
+    "status": "building" | "success" | "failure",
+    "gha_run_id": 12345,
+    "gha_run_url": "https://...",
+    "fm_build_id": 42,
+    "build_log_url": "https://..."
+  },
+  "aarch64": {
+    "status": "building" | "success" | "failure",
+    "gha_run_id": 12346,
+    "gha_run_url": "https://...",
+    "fm_build_id": 43,
+    "build_log_url": "https://..."
+  }
+}
+```
+
+Stored as a JSON string in DynamoDB (like `manifest` already is). The submission's top-level `status` still follows the existing state machine (`pending_build` -> `building` -> `pending_review` / `build_failed`), but now `building` means "at least one arch is still building" and the transition to `pending_review` only happens when all arches report success.
+
+### Backward Compatibility
+
+Old submissions (before this change) have the flat fields and `builds` is null. Frontend and API must handle both shapes. New submissions always use `builds`. No migration needed -- DynamoDB is schemaless.
+
+### Submission Response Shape
+
+The API response (`SubmissionResponse`) gains a `builds` field:
+
+```json
+{
+  "id": "...",
+  "status": "building",
+  "builds": {
+    "x86_64": { "status": "success", "gha_run_id": 123, "build_log_url": "..." },
+    "aarch64": { "status": "building", "gha_run_id": 124, "build_log_url": null }
+  },
+  // Legacy fields still present for old submissions
+  "gha_run_id": null,
+  "build_log_url": null
+}
+```
+
+---
+
+## Implementation Plan
+
+### Phase 1: Builder Image (aarch64 variant)
+
+**Goal:** Produce two builder images: `ghcr.io/friendlyhub/flatpak-builder:x86_64` and `ghcr.io/friendlyhub/flatpak-builder:aarch64`.
+
+#### 1.1 Dockerfile changes (`builder-image/Dockerfile`)
+
+No changes to the Dockerfile itself. The runtimes are installed for the host architecture automatically by `flatpak install`. The same Dockerfile built on x86_64 caches x86_64 runtimes; built on aarch64, it caches aarch64 runtimes.
+
+#### 1.2 Builder image CI (`.github/workflows/builder-image.yml`)
+
+Change from a single build to a matrix build:
+
+```yaml
+jobs:
+  build-and-push:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      # ... same checkout + login ...
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: builder-image
+          push: true
+          tags: |
+            ghcr.io/friendlyhub/flatpak-builder:${{ matrix.arch }}
+            ghcr.io/friendlyhub/flatpak-builder:${{ matrix.arch }}-${{ github.sha }}
+```
+
+Also keep `:latest` as an alias for `:x86_64` for backward compat during rollout.
+
+**Why not QEMU/buildx cross-build?** Because flatpak runtime caching (`flatpak install`) must run natively. QEMU emulation would be extremely slow for installing hundreds of MB of runtimes.
+
+#### 1.3 Build script changes (`builder-image/build.sh`)
+
+Add `ARCH` env var support:
+
+```bash
+ARCH="${ARCH:-$(uname -m)}"
+# Normalize: aarch64 stays as-is, x86_64 stays as-is
+# flatpak-builder uses the same names
+
+flatpak-builder \
+    --force-clean \
+    --arch="${ARCH}" \
+    --repo="${REPO_DIR}" \
+    ...
+```
+
+Also pass `ARCH` in the webhook payload so the server knows which arch completed:
+
+```bash
+WEBHOOK_BODY="{
+    \"submission_id\": \"${SUBMISSION_ID}\",
+    \"result\": \"success\",
+    \"arch\": \"${ARCH}\",
+    \"fm_build_id\": ${FM_BUILD_ID},
+    ...
+}"
+```
+
+Also add `gha_run_id` and `gha_run_url` to the webhook payload (the build script has access to `GITHUB_RUN_ID` and can construct the URL). This eliminates the need for `find_latest_run` on the server side.
+
+---
+
+### Phase 2: Build Workflow Template
+
+**Goal:** The workflow dispatched per-app supports an `arch` input and selects the right runner + image.
+
+#### 2.1 `build-templates/build.yml` changes
+
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      submission_id:
+        description: "FriendlyHub submission UUID"
+        required: true
+        type: string
+      app_id:
+        description: "Flatpak app ID"
+        required: true
+        type: string
+      manifest_path:
+        description: "Path to the manifest file"
+        required: false
+        type: string
+        default: ""
+      arch:
+        description: "Target architecture (x86_64 or aarch64)"
+        required: true
+        type: string
+        default: "x86_64"
+
+jobs:
+  build:
+    name: Build (${{ inputs.arch }})
+    runs-on: ${{ inputs.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    container:
+      image: ghcr.io/friendlyhub/flatpak-builder:${{ inputs.arch }}
+      options: --privileged
+
+    steps:
+      # ... same as before ...
+      - name: Build Flatpak
+        env:
+          ARCH: ${{ inputs.arch }}
+          # ... rest same ...
+        run: friendlyhub-build
+```
+
+The `notify failure` step also gains `ARCH`:
+
+```yaml
+      - name: Notify failure
+        if: failure()
+        env:
+          ARCH: ${{ inputs.arch }}
+          # ...
+        run: |
+          # ... same curl but add "arch": "${ARCH}" to the JSON body
+```
+
+#### 2.2 `build-templates/pr-check.yml` changes
+
+The `submit-and-build` job currently triggers one `build.yml` dispatch. It now needs to trigger two, but this is actually handled server-side (see Phase 3). The `pr-check.yml` calls `/webhooks/submit` which triggers the builds. No change needed here -- the server handles dispatching both arches.
+
+#### 2.3 `Justfile` / deployment scripts
+
+The `just build` and `just deploy` commands don't need changes. The build templates are embedded at compile time via `include_str!`. Rebuilding the server binary picks up the new templates.
+
+Verify: `just build && just deploy` still works unchanged. The new `build.yml` is backward-compatible (defaults `arch` to `x86_64`).
+
+---
+
+### Phase 3: Server Changes
+
+#### 3.1 Submission model (`server/src/models/submission.rs`)
+
+Add `ArchBuild` struct and `builds` field:
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ArchBuild {
+    pub status: String,          // "pending" | "building" | "success" | "failure"
+    pub gha_run_id: Option<i64>,
+    pub gha_run_url: Option<String>,
+    pub fm_build_id: Option<i32>,
+    pub build_log_url: Option<String>,
+}
+
+pub struct Submission {
+    // ... existing fields kept for backward compat ...
+    pub gha_run_id: Option<i64>,      // legacy, null for new
+    pub gha_run_url: Option<String>,   // legacy, null for new
+    pub fm_build_id: Option<i32>,      // legacy, null for new
+    pub build_log_url: Option<String>, // legacy, null for new
+
+    // New: per-arch build tracking
+    pub builds: Option<HashMap<String, ArchBuild>>,
+}
+```
+
+`to_item()` serializes `builds` as a JSON string (same pattern as `manifest`).
+`from_item()` deserializes it via `get_json_opt()`, defaulting to `None` for old submissions.
+
+New helper functions:
+
+```rust
+/// Initialize builds for a new multi-arch submission
+pub async fn init_builds(db: &Db, id: Uuid, arches: &[&str]) -> Result<(), AppError>
+
+/// Update a single arch's build status and fields
+pub async fn update_arch_build(db: &Db, id: Uuid, arch: &str, update: ArchBuild) -> Result<Submission, AppError>
+
+/// Check if all arch builds are complete (all success or any failure)
+pub fn all_builds_complete(builds: &HashMap<String, ArchBuild>) -> bool
+
+/// Check if all arch builds succeeded
+pub fn all_builds_succeeded(builds: &HashMap<String, ArchBuild>) -> bool
+```
+
+#### 3.2 Submission create with arches (`server/src/routes/submissions.rs`)
+
+The `SubmitRequest` struct gains `target_arches`:
+
+```rust
+#[derive(Deserialize)]
+struct SubmitRequest {
+    version: String,
+    manifest: Value,
+    metainfo: String,
+    #[serde(default)]
+    source_files: HashMap<String, String>,
+    #[serde(default)]
+    target_arches: Vec<String>,
+}
+```
+
+`ensure_repo_and_build` gains an `arches: &[String]` parameter. Currently dispatches one workflow; change to dispatch per-arch:
+
+```rust
+// Resolve arches and initialize per-arch build tracking
+submission::init_builds(&state.db, submission_id, &arches).await?;
+
+for arch in &arches {
+    let inputs = serde_json::json!({
+        "submission_id": submission_id.to_string(),
+        "app_id": app_id,
+        "manifest_path": format!("{app_id}.json"),
+        "arch": arch,
+    });
+    state.github.trigger_build(repo, "build.yml", "main", &inputs).await?;
+}
+
+submission::update_status(&state.db, submission_id, "building").await?;
+```
+
+Also write `friendlyhub.json` to the app repo if the arch selection is not "both":
+
+```rust
+if arches.len() < 2 {
+    let config = serde_json::json!({ "only-arches": arches });
+    state.github.put_file(repo, "friendlyhub.json", &config.to_string(), "...").await?;
+}
+```
+
+Remove the `find_latest_run` + `set_build_info` call. The build script now self-reports its run ID via the build-complete webhook.
+
+#### 3.3 Build-complete webhook (`server/src/routes/webhooks.rs:build_complete`)
+
+The payload gains `arch`, `gha_run_id`, and `gha_run_url` fields:
+
+```rust
+struct BuildCompletePayload {
+    submission_id: Uuid,
+    result: String,
+    arch: Option<String>,       // None for legacy single-arch builds
+    fm_build_id: Option<i32>,
+    build_log_url: Option<String>,
+    gha_run_id: Option<i64>,    // reported by build script
+    gha_run_url: Option<String>,
+    download_size: Option<i64>,
+    installed_size: Option<i64>,
+}
+```
+
+Logic change:
+
+```
+if arch is Some:
+  -> construct ArchBuild from payload fields
+  -> update builds[arch] via submission::update_arch_build
+  -> if all_builds_succeeded(builds): transition to pending_review, run checks
+  -> if any build failed: transition to build_failed
+  -> otherwise: stay in building (other arch still running)
+  -> notify per-arch (include arch in issue title for failures)
+  -> only update app sizes for x86_64 builds
+else:
+  -> legacy path (unchanged, for in-flight old submissions)
+```
+
+**Race condition mitigation:** Two `build_complete` webhooks can arrive near-simultaneously. `update_arch_build` does a read-modify-write. Use a DynamoDB conditional update with `updated_at` as a version stamp -- if it changed between read and write, re-read and retry (optimistic concurrency). At our volume (single-digit concurrent builds), this is more than sufficient.
+
+#### 3.4 Webhook submit (`server/src/routes/webhooks.rs:webhook_submit`)
+
+Currently triggers one build. Change to resolve arches and trigger per-arch:
+
+```rust
+// Read friendlyhub.json from the app repo if it exists (best-effort)
+let arches = resolve_arches_for_app_repo(&state, &payload.app_id).await;
+
+submission::init_builds(&state.db, sub.id, &arches).await?;
+
+for arch in &arches {
+    let inputs = serde_json::json!({
+        "submission_id": sub.id.to_string(),
+        "arch": arch,
+    });
+    state.github.trigger_build(&payload.app_id, "build.yml", "main", &inputs).await?;
+}
+```
+
+#### 3.5 PR submit (`server/src/routes/webhooks.rs:pr_submit`)
+
+The `PrSubmitPayload` already includes `source_files`. The `friendlyhub.json` (if present in the submission directory) arrives as part of `source_files`. `ensure_repo_and_build` resolves arches from it.
+
+#### 3.6 Notifications (`server/src/services/notifications.rs`)
+
+Add optional `arch` parameter to `notify_build_complete`:
+
+```rust
+pub async fn notify_build_complete(
+    github: &GitHubService,
+    app_id: &str,
+    version: &str,
+    success: bool,
+    build_log_url: Option<&str>,
+    arch: Option<&str>,
+)
+```
+
+When `arch` is Some, include it in the issue title: "Build failed (aarch64) - v1.2.3". When None (legacy or single-arch), keep the current title format.
+
+#### 3.7 Sizes tracking
+
+Only update `download_size` and `installed_size` on the App record when `arch == "x86_64"` (or when arch is None for legacy). x86_64 is the most common user platform, so its sizes are the most representative.
+
+---
+
+### Phase 4: Frontend Changes
+
+#### 4.1 TypeScript types (`web/src/types/index.ts`)
+
+Add `ArchBuild` interface and update `Submission`:
+
+```typescript
+export interface ArchBuild {
+  status: string;
+  gha_run_id?: number;
+  gha_run_url?: string;
+  fm_build_id?: number;
+  build_log_url?: string;
+}
+
+export interface Submission {
+  // ... existing fields ...
+  // New:
+  builds?: Record<string, ArchBuild>;
+}
+```
+
+#### 4.2 API client (`web/src/api/client.ts`)
+
+Update `submitApp` to accept `targetArches`:
+
+```typescript
+export const submitApp = (
+  appId: string,
+  version: string,
+  manifest: unknown,
+  metainfo: string,
+  sourceFiles?: Record<string, string>,
+  targetArches?: string[],
+) =>
+  request<...>(`/apps/${appId}/submit`, {
+    method: 'POST',
+    body: JSON.stringify({
+      version, manifest, metainfo,
+      ...(sourceFiles && Object.keys(sourceFiles).length > 0
+        ? { source_files: sourceFiles } : {}),
+      ...(targetArches ? { target_arches: targetArches } : {}),
+    }),
+  });
+```
+
+#### 4.3 Submit Version page (`web/src/pages/SubmitVersion.tsx`)
+
+Add target platforms dropdown in the submission area, between source files and the submit button:
+
+```tsx
+// State
+const [targetArches, setTargetArches] = useState<string>('both');
+
+// In the submission area, before the submit button:
+<div className="...">
+  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+    Target Platforms
+  </label>
+  <select
+    value={targetArches}
+    onChange={(e) => setTargetArches(e.target.value)}
+    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+  >
+    <option value="both">x86_64 + aarch64</option>
+    <option value="x86_64">x86_64 only</option>
+    <option value="aarch64">aarch64 only</option>
+  </select>
+  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+    Choose which CPU architectures to build for. Most apps should target both.
+  </p>
+</div>
+```
+
+The submit handler maps the dropdown value to the API:
+
+```typescript
+const archesForApi = targetArches === 'both'
+  ? ['x86_64', 'aarch64']
+  : [targetArches];
+
+submitApp(appId!, version, normalizeManifest(manifest), metainfoText, sourceFiles, archesForApi);
+```
+
+#### 4.4 Submission Detail page (`web/src/pages/SubmissionDetail.tsx`)
+
+Currently shows one build log link and one `BuildProgress` component. Change to show per-arch build progress side by side when `builds` exists:
+
+```tsx
+{sub.builds ? (
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {Object.entries(sub.builds).map(([arch, build]) => (
+      <div key={arch} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <h3 className="font-mono text-sm font-medium text-gray-900 dark:text-gray-100">{arch}</h3>
+          <StatusBadge status={build.status} />
+          {build.build_log_url && (
+            <a href={build.build_log_url} className="..." target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="w-4 h-4" /> Build Log
+            </a>
+          )}
+        </div>
+        {build.gha_run_id && appInfo?.app_id && (
+          <BuildProgress
+            appId={appInfo.app_id}
+            runId={build.gha_run_id}
+            runUrl={build.gha_run_url}
+            isBuilding={build.status === 'building' || build.status === 'pending'}
+          />
+        )}
+        {build.fm_build_id && (
+          <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            flat-manager build #{build.fm_build_id}
+          </div>
+        )}
+      </div>
+    ))}
+  </div>
+) : (
+  // Legacy single-build display (unchanged)
+  <>
+    {sub.gha_run_id && appInfo?.app_id && (
+      <BuildProgress
+        appId={appInfo.app_id}
+        runId={sub.gha_run_id}
+        runUrl={sub.gha_run_url}
+        isBuilding={sub.status === 'building' || sub.status === 'pending_build'}
+      />
+    )}
+  </>
+)}
+```
+
+The `BuildProgress` component (`web/src/components/BuildProgress.tsx`) takes `{ appId, runId, runUrl?, isBuilding }` and works per-run. No changes needed -- we just render one instance per arch.
+
+#### 4.5 Info card (submission detail)
+
+The existing info card shows a single `fm_build_id`. For multi-arch, move the per-arch flat-manager IDs into the per-arch build cards (above). The legacy path keeps the existing display.
+
+---
+
+### Phase 5: GitHub Issues for Build Logs (PR Workflow)
+
+**Chosen: One issue per failed arch.** Each failed arch gets its own issue titled e.g. "Build failed (aarch64) - v1.2.3". Immediate feedback, no waiting for the other arch to finish.
+
+When all arches succeed, a single "Build succeeded" issue is created (as today). The `notify_build_complete` call happens when `all_builds_succeeded` returns true.
+
+---
+
+### Phase 6: Appstream & purge-server Multi-Arch
+
+#### 6.1 Appstream extraction (`deploy/flat-manager/purge-server.py:extract_appstream`)
+
+Currently hardcoded to `appstream/x86_64`. OSTree generates per-arch appstream branches automatically. Change to loop over arches:
+
+```python
+ARCHES = ["x86_64", "aarch64"]
+
+def extract_appstream():
+    for arch in ARCHES:
+        appstream_dir = os.path.join(REPO_PATH, "appstream", arch)
+        for branch in (f"appstream/{arch}", f"appstream2/{arch}"):
+            # ... same checkout logic ...
+```
+
+#### 6.2 Appstream fetching (`server/src/services/appstream.rs`)
+
+Keep reading `repo/appstream/x86_64/appstream.xml.gz` only. The appstream data (app metadata, icons) is the same for both arches. **No change.**
+
+#### 6.3 Icon URLs (`server/src/routes/internal.rs`)
+
+Same situation. **No change.**
+
+#### 6.4 Purge server ref deletion
+
+Already handles multi-arch correctly: deletes all refs matching `app/{app_id}/` which covers both arches. **No change needed.**
+
+---
+
+### Phase 7: Rollout & Migration
+
+#### 7.1 Rollout order
+
+1. **Build and push aarch64 builder image.** Merge the builder-image CI changes and trigger the workflow. Wait for both `:x86_64` and `:aarch64` tags to be available in GHCR.
+
+2. **Deploy the updated build script.** The new `build.sh` with `ARCH` support is backward-compatible (defaults to host arch). Push the new builder images.
+
+3. **Deploy server changes.** The new `build_complete` handler supports both `arch: Some(...)` and `arch: None` (legacy). Old in-flight submissions continue to work via the legacy path.
+
+4. **Deploy frontend changes.** The submission detail page handles both `builds` (new) and legacy fields.
+
+5. **Update workflows in existing app repos.** The server pushes workflows on every submission, so existing apps get the new `build.yml` on their next submission automatically.
+
+#### 7.2 In-flight submission handling
+
+When we deploy, there may be submissions currently `building` with the old single-arch format. The `build_complete` handler's legacy path (no `arch` field) handles these. They complete normally and stay single-arch.
+
+#### 7.3 Testing
+
+1. Submit `com.keithvassallo.clustercut` (or `org.friendlyhub.DummyApp`) after deploying
+2. Verify two GHA runs appear in the app repo (or one, if x86_64-only is selected)
+3. Verify both builds complete and the submission transitions to `pending_review`
+4. Verify the frontend shows both build logs side by side
+5. Test failure: manually fail one arch and verify the submission goes to `build_failed`
+6. Verify `flatpak remote-ls` shows refs for both arches
+7. Test web UI: submit with "x86_64 only" and verify only one build runs
+8. Test PR flow: include `friendlyhub.json` with `"only-arches": ["x86_64"]` and verify
+
+---
+
+## Open Questions
+
+1. **GitHub ARM runner availability.** `ubuntu-24.04-arm` is available for public repos on GitHub Free/Team. FriendlyHub repos are public, so this should work. Verify by dispatching a test workflow with `runs-on: ubuntu-24.04-arm`.
+
+2. **Runtime availability on aarch64.** All major runtimes (freedesktop, GNOME, KDE) are published for aarch64 on Flathub. Verify the specific versions we pre-cache (freedesktop 24.08/25.08, GNOME 48/49, KDE 6.8/6.10) are available.
+
+3. **Cost.** ARM runners may have different pricing. Not a concern at current low volume.
+
+4. **Build times.** aarch64 builds may differ in speed. Builds are independent so this doesn't block x86_64.
+
+---
+
+## Files to Change (Summary)
+
+### Must change:
+- `builder-image/build.sh` -- add ARCH env var, pass to flatpak-builder and webhook, self-report gha_run_id
+- `build-templates/build.yml` -- add `arch` input, dynamic runner + image selection, pass ARCH to build script and failure webhook
+- `.github/workflows/builder-image.yml` -- matrix build for both arches
+- `server/src/models/submission.rs` -- add ArchBuild struct, builds field, helper functions
+- `server/src/routes/submissions.rs` -- target_arches on SubmitRequest, resolve arches, dispatch per-arch, write friendlyhub.json
+- `server/src/routes/webhooks.rs` -- handle per-arch build_complete, aggregate status, arch in all submit handlers
+- `server/src/services/notifications.rs` -- add arch parameter to notify_build_complete
+- `web/src/types/index.ts` -- add ArchBuild interface, builds field on Submission
+- `web/src/api/client.ts` -- add targetArches to submitApp
+- `web/src/pages/SubmitVersion.tsx` -- target platforms dropdown
+- `web/src/pages/SubmissionDetail.tsx` -- side-by-side build logs per arch
+- `docs/submitting-an-app.md` -- document target platforms dropdown
+- `docs/submitting-via-pr.md` -- document friendlyhub.json
+
+### Should change:
+- `deploy/flat-manager/purge-server.py` -- extract_appstream for both arches
+
+### No change needed:
+- `builder-image/Dockerfile` -- same Dockerfile works for both arches
+- `build-templates/pr-check.yml` -- build triggering goes through server
+- `deploy/flat-manager/entrypoint.sh` -- OSTree repo is arch-agnostic
+- `server/src/services/appstream.rs` -- keep reading x86_64 appstream only
+- `server/src/routes/internal.rs` -- icon URLs stay x86_64
+- `server/src/services/install_counts.rs` -- already parses arch from ref paths, counts per app_id not per arch
+- `server/src/services/github.rs` -- find_latest_run removed from the flow (build script self-reports)
+- `Justfile` -- no changes
+- `infra/serverless.yml` -- Lambda stays x86_64 (it's the API server, not the builder)

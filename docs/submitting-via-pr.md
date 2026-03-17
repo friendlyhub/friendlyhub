@@ -80,10 +80,32 @@ You do **not** need to include the metainfo file in your upstream source reposit
 org.example.MyApp/
   org.example.MyApp.yaml
   org.example.MyApp.metainfo.xml
-  cargo-sources.json          # optional
+  friendlyhub.json              # optional, for architecture selection
+  cargo-sources.json            # optional
 ```
 
 4. Open a pull request targeting `main`
+
+### Choosing Target Architectures
+
+By default, FriendlyHub builds your app for both x86_64 (Intel/AMD) and aarch64 (ARM). If your app can only run on a specific architecture (e.g. it bundles proprietary x86_64-only binaries), add a `friendlyhub.json` file to your app directory:
+
+```json
+{ "only-arches": ["x86_64"] }
+```
+
+Or to exclude a specific architecture:
+
+```json
+{ "skip-arches": ["aarch64"] }
+```
+
+If your app builds from source without architecture-specific dependencies, you do not need this file -- it will build on both architectures automatically.
+
+This format is intentionally compatible with Flathub's `flathub.json`, so developers migrating from Flathub can reuse their existing configuration.
+
+> [!TIP]
+> If individual modules in your manifest need different sources per architecture, use `only-arches` and `skip-arches` at the module or source level within the manifest itself. The `friendlyhub.json` file controls which architectures are built at all; per-module arch fields control conditional compilation within a build.
 
 ## Step 3: Automated Checks
 
@@ -106,11 +128,11 @@ For custom domains, the check comment includes instructions for placing a verifi
 Once the checks pass and a maintainer merges your PR:
 
 1. FriendlyHub creates a repository at `github.com/friendlyhub/{app-id}`
-2. Your manifest, metainfo, and companion files are pushed there
-3. A build starts automatically via GitHub Actions
+2. Your manifest, metainfo, and companion files (including `friendlyhub.json` if present) are pushed there
+3. A build starts automatically via GitHub Actions -- one build per target architecture
 4. You receive a collaborator invite to the repository
 
-You'll be notified of the build result via a GitHub issue on your app's repo.
+You'll be notified of the build result via a GitHub issue on your app's repo. If you're building for multiple architectures, each failed architecture gets its own issue with a link to the build log.
 
 ## Step 5: Review
 
