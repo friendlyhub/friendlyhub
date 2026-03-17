@@ -144,6 +144,8 @@ export const submitReviewDecision = (id: string, decision: string, comment: stri
   );
 
 // Admin
+export const getAdminApps = () => request<App[]>('/admin/apps');
+
 export const getAdminUsers = () => request<User[]>('/admin/users');
 
 export const updateUserRole = (id: string, role: string) =>

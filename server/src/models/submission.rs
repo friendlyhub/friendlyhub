@@ -26,10 +26,10 @@ pub struct Submission {
     pub updated_at: DateTime<Utc>,
 }
 
-/// Valid status transitions:
 /// pending_build -> building -> build_failed | pending_review
 /// pending_review -> approved | changes_requested
 /// approved -> published
+#[cfg(test)]
 const VALID_TRANSITIONS: &[(&str, &str)] = &[
     ("pending_build", "building"),
     ("building", "build_failed"),
@@ -39,7 +39,8 @@ const VALID_TRANSITIONS: &[(&str, &str)] = &[
     ("approved", "published"),
 ];
 
-pub fn is_valid_transition(from: &str, to: &str) -> bool {
+#[cfg(test)]
+fn is_valid_transition(from: &str, to: &str) -> bool {
     VALID_TRANSITIONS
         .iter()
         .any(|(f, t)| *f == from && *t == to)

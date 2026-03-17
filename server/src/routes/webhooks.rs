@@ -169,6 +169,7 @@ struct WebhookSubmitPayload {
     app_id: String,
     version: String,
     manifest: Value,
+    #[allow(dead_code)]
     source_ref: Option<String>,
     metainfo: Option<String>,
 }

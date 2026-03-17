@@ -1,5 +1,4 @@
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
 
 use crate::errors::AppError;
 
@@ -73,25 +72,6 @@ pub struct FlatManagerClient {
     ecs_service: String,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct Build {
-    pub id: i32,
-    pub repo: String,
-}
-
-#[derive(Debug, Serialize)]
-struct CreateBuildRequest<'a> {
-    repo: &'a str,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct BuildStatus {
-    pub id: i32,
-    pub repo: String,
-    #[serde(default)]
-    pub status: Option<String>,
-}
-
 impl FlatManagerClient {
     pub fn new(
         token: &str,
@@ -113,79 +93,6 @@ impl FlatManagerClient {
     /// Discover the current flat-manager URL from ECS.
     async fn base_url(&self) -> Result<String, AppError> {
         discover_url(&self.ecs_client, &self.ec2_client, &self.ecs_cluster, &self.ecs_service).await
-    }
-
-    /// Create a new build in flat-manager. Returns the build ID and repo path.
-    pub async fn create_build(&self, repo: &str) -> Result<Build, AppError> {
-        let base_url = self.base_url().await?;
-        let resp = self
-            .client
-            .post(format!("{base_url}/api/v1/build"))
-            .bearer_auth(&self.token)
-            .json(&CreateBuildRequest { repo })
-            .send()
-            .await
-            .map_err(|e| AppError::Internal(format!("flat-manager create build failed: {e}")))?;
-
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            return Err(AppError::Internal(format!(
-                "flat-manager create build returned {status}: {body}"
-            )));
-        }
-
-        resp.json()
-            .await
-            .map_err(|e| AppError::Internal(format!("Failed to parse flat-manager response: {e}")))
-    }
-
-    /// Get the status of a build.
-    pub async fn get_build(&self, build_id: i32) -> Result<BuildStatus, AppError> {
-        let base_url = self.base_url().await?;
-        let resp = self
-            .client
-            .get(format!("{base_url}/api/v1/build/{build_id}"))
-            .bearer_auth(&self.token)
-            .send()
-            .await
-            .map_err(|e| AppError::Internal(format!("flat-manager get build failed: {e}")))?;
-
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            return Err(AppError::Internal(format!(
-                "flat-manager get build returned {status}: {body}"
-            )));
-        }
-
-        resp.json()
-            .await
-            .map_err(|e| AppError::Internal(format!("Failed to parse flat-manager response: {e}")))
-    }
-
-    /// Commit a build (finalize uploads, mark ready for publish).
-    pub async fn commit_build(&self, build_id: i32) -> Result<(), AppError> {
-        let base_url = self.base_url().await?;
-        let resp = self
-            .client
-            .post(format!("{base_url}/api/v1/build/{build_id}/commit"))
-            .bearer_auth(&self.token)
-            .header("Content-Type", "application/json")
-            .body("{}")
-            .send()
-            .await
-            .map_err(|e| AppError::Internal(format!("flat-manager commit failed: {e}")))?;
-
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            return Err(AppError::Internal(format!(
-                "flat-manager commit returned {status}: {body}"
-            )));
-        }
-
-        Ok(())
     }
 
     /// Purge an app's OSTree refs from the repo (called on app delete).

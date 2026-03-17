@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::errors::AppError;
-
 /// Result of validating a Flatpak manifest.
 #[derive(Debug, Serialize)]
 pub struct ValidationResult {
@@ -102,14 +100,14 @@ pub fn validate(manifest: &Value) -> ValidationResult {
     }
 }
 
-/// Parse a manifest from YAML or JSON string into a serde_json::Value.
-pub fn parse_manifest_str(input: &str) -> Result<Value, AppError> {
+#[cfg(test)]
+pub fn parse_manifest_str(input: &str) -> Result<Value, crate::errors::AppError> {
     // Try JSON first, then YAML
     if let Ok(v) = serde_json::from_str::<Value>(input) {
         return Ok(v);
     }
     serde_yaml::from_str::<Value>(input)
-        .map_err(|e| AppError::BadRequest(format!("Invalid manifest format (not valid JSON or YAML): {e}")))
+        .map_err(|e| crate::errors::AppError::BadRequest(format!("Invalid manifest format (not valid JSON or YAML): {e}")))
 }
 
 fn validate_app_id(app_id: &str, errors: &mut Vec<String>) {
@@ -134,12 +132,6 @@ fn validate_app_id(app_id: &str, errors: &mut Vec<String>) {
             return;
         }
     }
-}
-
-/// Parse a manifest from YAML string into a serde_json::Value.
-pub fn parse_yaml_manifest(input: &str) -> Result<Value, AppError> {
-    serde_yaml::from_str::<Value>(input)
-        .map_err(|e| AppError::BadRequest(format!("Invalid YAML manifest: {e}")))
 }
 
 fn check_permissions(finish_args: &[String], warnings: &mut Vec<String>) {

@@ -18,25 +18,6 @@ pub struct VerifiedDomain {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize)]
-pub struct VerifiedDomainResponse {
-    pub domain: String,
-    pub token: String,
-    pub verified: bool,
-    pub verified_at: Option<DateTime<Utc>>,
-}
-
-impl From<VerifiedDomain> for VerifiedDomainResponse {
-    fn from(d: VerifiedDomain) -> Self {
-        Self {
-            domain: d.domain,
-            token: d.token,
-            verified: d.verified,
-            verified_at: d.verified_at,
-        }
-    }
-}
-
 impl VerifiedDomain {
     fn to_item(&self) -> HashMap<String, AttributeValue> {
         let mut item = HashMap::new();

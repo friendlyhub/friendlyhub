@@ -120,7 +120,7 @@ If the build succeeds, your app enters the review queue. A human reviewer checks
 - **Accurate metadata** -- description and screenshots match the app
 - **Working app** -- the built Flatpak runs and does what it claims
 
-FriendlyHub follows the [Friendly Manifesto](https://friendlyhub.org/manifesto). We do **not** reject apps based on icon quality, toolkit choice, code quality, or whether the code was written with AI assistance.
+FriendlyHub follows the [Friendly Manifesto](https://friendlyhub.org/manifesto). We check your app for secrurity, accuracy and functionality. We do **not** reject apps based on icon style, toolkit choice, or whether the code was written with AI assistance.
 
 The reviewer will either **approve** your app or request **changes** with specific feedback. You'll be notified via a GitHub issue on your app's repo.
 

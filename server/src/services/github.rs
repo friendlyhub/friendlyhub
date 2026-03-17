@@ -74,10 +74,6 @@ impl GitHubService {
         }
     }
 
-    pub fn org(&self) -> &str {
-        &self.org
-    }
-
     fn generate_app_jwt(&self) -> Result<String, AppError> {
         let now = Utc::now().timestamp();
         let claims = AppJwtClaims {
@@ -665,6 +661,7 @@ impl GitHubService {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct WorkflowRun {
     pub id: i64,
     pub html_url: String,

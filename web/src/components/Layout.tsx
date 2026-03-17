@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Package, ClipboardCheck, Users, Menu, X } from 'lucide-react';
+import { Package, ClipboardCheck, Users, Menu, X, Layers } from 'lucide-react';
 import { useAuthStore } from '../stores/auth';
 import ThemeToggle from './ThemeToggle';
 
@@ -35,7 +35,10 @@ export default function Layout() {
       ? [{ to: '/review', label: 'Review Queue', icon: ClipboardCheck }]
       : []),
     ...(user?.role === 'admin'
-      ? [{ to: '/admin/users', label: 'Users', icon: Users }]
+      ? [
+          { to: '/admin/apps', label: 'All Apps', icon: Layers },
+          { to: '/admin/users', label: 'Users', icon: Users },
+        ]
       : []),
   ];
 

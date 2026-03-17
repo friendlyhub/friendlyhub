@@ -353,37 +353,89 @@ pub async fn list_by_owner(db: &Db, owner_id: Uuid) -> Result<Vec<App>, AppError
 pub async fn list_published(
     db: &Db,
     search: Option<&str>,
-    limit: i64,
+    _limit: i64,
     _offset: i64,
 ) -> Result<Vec<App>, AppError> {
-    // Scan for published apps. For search, do client-side filtering.
-    // At scale, this should be replaced with a search service (Phase 6: Meilisearch).
-    let mut builder = db
-        .client
-        .scan()
-        .table_name(&db.table)
-        .filter_expression("entity_type = :et AND is_published = :pub")
-        .expression_attribute_values(":et", AttributeValue::S("App".into()))
-        .expression_attribute_values(":pub", AttributeValue::Bool(true))
-        .limit(limit as i32);
+    // Scan all published apps, filter in Rust for case-insensitive search.
+    // DynamoDB contains() is case-sensitive so we can't filter there.
+    // At scale, replace with a search service.
+    let mut all_apps = Vec::new();
+    let mut exclusive_start_key = None;
+
+    loop {
+        let mut scan = db
+            .client
+            .scan()
+            .table_name(&db.table)
+            .filter_expression("entity_type = :et AND is_published = :pub")
+            .expression_attribute_values(":et", AttributeValue::S("App".into()))
+            .expression_attribute_values(":pub", AttributeValue::Bool(true));
+
+        if let Some(key) = exclusive_start_key {
+            scan = scan.set_exclusive_start_key(Some(key));
+        }
+
+        let result = scan
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("DynamoDB scan failed: {e}")))?;
+
+        for item in result.items() {
+            all_apps.push(App::from_item(item)?);
+        }
+
+        match result.last_evaluated_key() {
+            Some(key) => exclusive_start_key = Some(key.to_owned()),
+            None => break,
+        }
+    }
 
     if let Some(q) = search {
         if !q.is_empty() {
             let q_lower = q.to_lowercase();
-            // DynamoDB doesn't have full-text search, so we use contains on name+summary
-            builder = builder
-                .filter_expression("entity_type = :et AND is_published = :pub AND (contains(#n, :q) OR contains(summary, :q))")
-                .expression_attribute_names("#n", "name")
-                .expression_attribute_values(":q", AttributeValue::S(q_lower));
+            all_apps.retain(|a| {
+                a.name.to_lowercase().contains(&q_lower)
+                    || a.summary.to_lowercase().contains(&q_lower)
+                    || a.app_id.to_lowercase().contains(&q_lower)
+            });
         }
     }
 
-    let result = builder
-        .send()
-        .await
-        .map_err(|e| AppError::Internal(format!("DynamoDB scan failed: {e}")))?;
+    all_apps.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(all_apps)
+}
 
-    let mut apps: Vec<App> = result.items().iter().map(|item| App::from_item(item)).collect::<Result<Vec<_>, _>>()?;
+pub async fn list_all(db: &Db) -> Result<Vec<App>, AppError> {
+    let mut apps = Vec::new();
+    let mut exclusive_start_key = None;
+
+    loop {
+        let mut scan = db
+            .client
+            .scan()
+            .table_name(&db.table)
+            .filter_expression("entity_type = :et")
+            .expression_attribute_values(":et", AttributeValue::S("App".into()));
+
+        if let Some(key) = exclusive_start_key {
+            scan = scan.set_exclusive_start_key(Some(key));
+        }
+
+        let result = scan
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("DynamoDB scan failed: {e}")))?;
+
+        for item in result.items() {
+            apps.push(App::from_item(item)?);
+        }
+
+        match result.last_evaluated_key() {
+            Some(key) => exclusive_start_key = Some(key.to_owned()),
+            None => break,
+        }
+    }
+
     apps.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(apps)
 }

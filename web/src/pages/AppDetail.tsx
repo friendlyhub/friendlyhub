@@ -232,7 +232,8 @@ export default function AppDetail() {
     mutationFn: () => deleteApp(app!.app_id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['myApps'] });
-      navigate('/my/apps');
+      queryClient.invalidateQueries({ queryKey: ['adminApps'] });
+      navigate(isAdmin && !isOwner ? '/admin/apps' : '/my/apps');
     },
   });
 
@@ -241,6 +242,8 @@ export default function AppDetail() {
   if (!app) return null;
 
   const isOwner = user && user.id === app.owner_id;
+  const isAdmin = user && user.role === 'admin';
+  const canManage = isOwner || isAdmin;
   const finishArgs = app.finish_args ?? [];
   const classified = finishArgs.map(classifyPermission);
   const overallSeverity = finishArgs.length > 0 ? getOverallSeverity(classified) : 'safe';
@@ -249,25 +252,27 @@ export default function AppDetail() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Owner management panel */}
-      {isOwner && (
+      {/* Management panel */}
+      {canManage && (
         <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mb-6">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
               <Info size={16} />
-              <span className="font-medium">You own this app.</span>
+              <span className="font-medium">{isOwner ? 'You own this app.' : 'Admin access.'}</span>
               {!app.is_published && (
                 <span className="text-blue-600 dark:text-blue-400">This page is a preview and is not publicly visible.</span>
               )}
             </div>
             <div className="flex items-center gap-2">
-              <Link
-                to={`/my/apps/${app.app_id}/submit`}
-                className="inline-flex items-center gap-1.5 bg-emerald-600 text-white px-3.5 py-1.5 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors"
-              >
-                <Upload size={14} />
-                Submit Version
-              </Link>
+              {isOwner && (
+                <Link
+                  to={`/my/apps/${app.app_id}/submit`}
+                  className="inline-flex items-center gap-1.5 bg-emerald-600 text-white px-3.5 py-1.5 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors"
+                >
+                  <Upload size={14} />
+                  Submit Version
+                </Link>
+              )}
               {app.is_published && (
                 <button
                   onClick={() => setShowUnpublish(true)}

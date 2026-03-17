@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::auth::middleware::AdminUser;
 use crate::errors::AppError;
-use crate::models::user;
+use crate::models::{app, user};
 use crate::router::AppState;
 
 pub fn routes() -> Router<AppState> {
@@ -17,6 +17,7 @@ pub fn routes() -> Router<AppState> {
         .route("/admin/users", get(list_users))
         .route("/admin/users/{id}/role", put(update_role))
         .route("/admin/users/{id}", delete(delete_user))
+        .route("/admin/apps", get(list_apps))
 }
 
 async fn list_users(
@@ -77,4 +78,13 @@ async fn delete_user(
     user::delete(&state.db, id).await?;
 
     Ok(Json(serde_json::json!({ "status": "ok" })))
+}
+
+async fn list_apps(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+) -> Result<Json<Vec<app::AppResponse>>, AppError> {
+    let apps = app::list_all(&state.db).await?;
+    let responses: Vec<app::AppResponse> = apps.into_iter().map(Into::into).collect();
+    Ok(Json(responses))
 }
