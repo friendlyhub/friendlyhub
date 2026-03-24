@@ -56,6 +56,7 @@ pub async fn verify_domain_token(domain: &str, expected_token: &str) -> Result<b
     let url = format!("https://{domain}/.well-known/org.friendlyhub.VerifiedApps.txt");
     let client = Client::builder()
         .timeout(std::time::Duration::from_secs(10))
+        .user_agent("FriendlyHub")
         .build()
         .map_err(|e| AppError::Internal(format!("Failed to create HTTP client: {e}")))?;
 

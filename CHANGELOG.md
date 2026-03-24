@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Components are versioned independently: **server**, **web**, **builder-image**, **infra**.
 
+## [server-0.1.1] - 2026-03-24
+
+### Fixed
+- Domain verification failing on hosts that reject requests without a User-Agent header (e.g. Cloudflare)
+
 ## [builder-image-0.2.0] - 2026-03-24
 
 ### Changed
