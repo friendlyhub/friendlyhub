@@ -1,4 +1,4 @@
-# FriendlyHub Flatpak Builder — version 0.1.0
+# FriendlyHub Flatpak Builder — version 0.2.0
 # Used in GitHub Actions to build Flatpak apps and upload to flat-manager.
 #
 # Based on Fedora for up-to-date flatpak tooling.
@@ -50,12 +50,12 @@ RUN flatpak install -y --noninteractive flathub \
     org.freedesktop.Sdk//24.08 \
     org.freedesktop.Platform//25.08 \
     org.freedesktop.Sdk//25.08 \
-    org.gnome.Platform//48 \
-    org.gnome.Sdk//48 \
     org.gnome.Platform//49 \
     org.gnome.Sdk//49 \
-    org.kde.Platform//6.8 \
-    org.kde.Sdk//6.8 \
+    org.gnome.Platform//50 \
+    org.gnome.Sdk//50 \
+    org.kde.Platform//6.9 \
+    org.kde.Sdk//6.9 \
     org.kde.Platform//6.10 \
     org.kde.Sdk//6.10
 

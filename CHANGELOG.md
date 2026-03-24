@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Components are versioned independently: **server**, **web**, **builder-image**, **infra**.
 
+## [builder-image-0.2.0] - 2026-03-24
+
+### Changed
+- Updated GNOME runtimes: dropped EOL 48, added 50 (kept 49)
+- Updated KDE runtimes: dropped EOL 6.8, added 6.9 (kept 6.10)
+
 ## [server-0.1.0] - 2026-03-17
 
 ### Added
