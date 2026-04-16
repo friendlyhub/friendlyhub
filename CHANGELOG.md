@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Components are versioned independently: **server**, **web**, **builder-image**, **infra**.
 
+## [infra-0.1.1] - 2026-04-16
+
+### Fixed
+- CloudFront distribution-level `CustomErrorResponses` was hijacking API Gateway 404s and rewriting them to `/index.html`, causing the SPA to receive HTML instead of the API's JSON error body. SPA route fallback is now handled in the viewer-request CloudFront Function (default behavior only), so API responses pass through untouched.
+
+## [web-0.1.1] - 2026-04-16
+
+### Fixed
+- API client now checks the response `content-type` and throws a readable error when the server returns a non-JSON body, instead of surfacing a cryptic `JSON.parse: unexpected character at line 1 column 1` to the user.
+
 ## [server-0.1.1] - 2026-03-24
 
 ### Fixed

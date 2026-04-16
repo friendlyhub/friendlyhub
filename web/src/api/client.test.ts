@@ -7,6 +7,8 @@ vi.stubGlobal('fetch', mockFetch);
 // Must import after stubbing fetch
 const { listApps, getMe, createApp } = await import('./client');
 
+const jsonHeaders = new Headers({ 'content-type': 'application/json' });
+
 beforeEach(() => {
   mockFetch.mockReset();
   localStorage.clear();
@@ -17,6 +19,7 @@ describe('API client', () => {
     localStorage.setItem('token', 'test-jwt');
     mockFetch.mockResolvedValueOnce({
       ok: true,
+      headers: jsonHeaders,
       json: async () => ({ id: '1', github_login: 'dev', display_name: 'Dev', avatar_url: null, role: 'developer' }),
     });
 
@@ -29,6 +32,7 @@ describe('API client', () => {
   it('does not add Authorization header without token', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
+      headers: jsonHeaders,
       json: async () => [],
     });
 
@@ -41,6 +45,7 @@ describe('API client', () => {
   it('builds correct URL with search params', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
+      headers: jsonHeaders,
       json: async () => [],
     });
 
@@ -57,6 +62,7 @@ describe('API client', () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 400,
+      headers: jsonHeaders,
       json: async () => ({ error: 'Bad app-id format' }),
     });
 
@@ -71,15 +77,28 @@ describe('API client', () => {
       ok: false,
       status: 500,
       statusText: 'Internal Server Error',
+      headers: jsonHeaders,
       json: async () => { throw new Error('not json'); },
     });
 
     await expect(getMe()).rejects.toThrow('Internal Server Error');
   });
 
+  it('throws a readable error when a 200 response is not JSON', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'text/html' }),
+      json: async () => { throw new Error('should not be called'); },
+    });
+
+    await expect(getMe()).rejects.toThrow('Unexpected response from server');
+  });
+
   it('sends JSON body for POST requests', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
+      headers: jsonHeaders,
       json: async () => ({ id: '1', app_id: 'org.test.App' }),
     });
 

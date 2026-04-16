@@ -16,9 +16,16 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     headers: getHeaders(),
     ...options,
   });
+  const contentType = res.headers.get('content-type') || '';
+  const isJson = contentType.includes('application/json');
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: res.statusText }));
+    const body = isJson
+      ? await res.json().catch(() => ({ error: res.statusText }))
+      : { error: res.statusText };
     throw new Error(body.error || `Request failed: ${res.status}`);
+  }
+  if (!isJson) {
+    throw new Error(`Unexpected response from server (status ${res.status})`);
   }
   return res.json();
 }

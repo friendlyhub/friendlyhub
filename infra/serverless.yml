@@ -1,4 +1,4 @@
-# version: 0.1.0
+# version: 0.1.1
 service: friendlyhub
 
 custom:
@@ -430,11 +430,20 @@ resources:
               event.request.uri = uri + 'index.html';
             } else if (uri.startsWith('/docs/') && !uri.includes('.')) {
               event.request.uri = uri + '.html';
+            } else {
+              var spaPrefixes = ['/apps', '/my', '/admin', '/review', '/setup', '/auth', '/manifesto', '/privacy'];
+              for (var i = 0; i < spaPrefixes.length; i++) {
+                var p = spaPrefixes[i];
+                if (uri === p || uri.startsWith(p + '/')) {
+                  event.request.uri = '/index.html';
+                  break;
+                }
+              }
             }
             return event.request;
           }
         FunctionConfig:
-          Comment: Rewrite /docs/ subpaths to index.html for VitePress
+          Comment: Rewrite /docs/ subpaths for VitePress and SPA routes to /index.html
           Runtime: cloudfront-js-2.0
 
     FlatpakrefContentTypeFunction:
@@ -590,15 +599,6 @@ resources:
               CustomOriginConfig:
                 HTTPSPort: 443
                 OriginProtocolPolicy: https-only
-          CustomErrorResponses:
-            - ErrorCode: 403
-              ResponseCode: 200
-              ResponsePagePath: /index.html
-              ErrorCachingMinTTL: 10
-            - ErrorCode: 404
-              ResponseCode: 200
-              ResponsePagePath: /index.html
-              ErrorCachingMinTTL: 10
           HttpVersion: http2and3
           PriceClass: PriceClass_100
         Tags:
