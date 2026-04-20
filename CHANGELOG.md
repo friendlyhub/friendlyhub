@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Components are versioned independently: **server**, **web**, **builder-image**, **infra**.
 
+## [server-0.1.2] - 2026-04-20
+
+### Fixed
+- Multi-arch submission approval was failing to publish to the OSTree repo because the approval code only consulted the legacy single-arch `fm_build_id` field and logged a "cannot auto-publish" warning for any submission that stored its build IDs in the per-arch `builds` map. The approval path now iterates over `builds` when no top-level `fm_build_id` is set, publishing every arch's build before flipping the submission to `published`.
+
 ## [infra-0.1.1] - 2026-04-16
 
 ### Fixed

@@ -206,32 +206,45 @@ async fn review_decision(
             }
         }
 
-        if let Some(fm_build_id) = sub.fm_build_id {
-            match state.flat_manager.publish_build(fm_build_id).await {
-                Ok(()) => {
-                    submission::update_status(&state.db, id, "published").await?;
-                    app::set_published(&state.db, sub.app_id, true).await?;
-                    tracing::info!(
-                        submission_id = %id,
-                        fm_build_id = fm_build_id,
-                        "Build published via flat-manager"
-                    );
-                    notifications::notify_published(&state.github, app_id_str, &sub.version).await;
-                }
-                Err(e) => {
-                    tracing::error!(
-                        submission_id = %id,
-                        error = %e,
-                        "Failed to publish via flat-manager — submission approved but not published"
-                    );
-                    // Don't fail the review — it's approved, publish can be retried
-                }
-            }
+        let build_ids: Vec<i32> = if let Some(bid) = sub.fm_build_id {
+            vec![bid]
         } else {
+            sub.builds
+                .as_ref()
+                .map(|m| m.values().filter_map(|b| b.fm_build_id).collect())
+                .unwrap_or_default()
+        };
+
+        if build_ids.is_empty() {
             tracing::warn!(
                 submission_id = %id,
-                "Submission approved but no flat-manager build ID — cannot auto-publish"
+                "Submission approved but no flat-manager build IDs — cannot auto-publish"
             );
+        } else {
+            let mut failures = 0;
+            for bid in &build_ids {
+                match state.flat_manager.publish_build(*bid).await {
+                    Ok(()) => tracing::info!(
+                        submission_id = %id,
+                        fm_build_id = bid,
+                        "Build published via flat-manager"
+                    ),
+                    Err(e) => {
+                        failures += 1;
+                        tracing::error!(
+                            submission_id = %id,
+                            fm_build_id = bid,
+                            error = %e,
+                            "Failed to publish via flat-manager — submission approved but not published"
+                        );
+                    }
+                }
+            }
+            if failures == 0 {
+                submission::update_status(&state.db, id, "published").await?;
+                app::set_published(&state.db, sub.app_id, true).await?;
+                notifications::notify_published(&state.github, app_id_str, &sub.version).await;
+            }
         }
     }
 
