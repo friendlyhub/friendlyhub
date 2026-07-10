@@ -33,13 +33,21 @@ jobs:
   build:
     name: Build (${{ inputs.arch }})
     runs-on: ${{ inputs.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
-    container:
-      image: ghcr.io/friendlyhub/flatpak-builder:${{ inputs.arch }}
-      options: --privileged
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # GitHub-hosted runners ship with ~30 GB of preinstalled tooling we never
+      # use (Android SDK, .NET, GHC, CodeQL). Reclaim it so the builder image plus
+      # the Flatpak runtime/SDK installs have room -- x86_64 was running out here.
+      - name: Free up runner disk space
+        run: |
+          echo "Before:"; df -h / | tail -1
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL 2>/dev/null || true
+          sudo docker image prune -af >/dev/null 2>&1 || true
+          echo "After:"; df -h / | tail -1
 
       - name: Fetch shared-modules
         run: |
@@ -87,6 +95,10 @@ jobs:
           echo "Detected manifest: ${MANIFEST}"
           echo "Detected app-id: ${APP_ID}"
 
+      # Run the builder image directly (not as a job-level container) so the
+      # disk-cleanup step above runs on the host first. The checkout is mounted
+      # at /workspace and used as the working dir, matching how the build script
+      # resolves the manifest and shared-modules; /build/* stays the scratch area.
       - name: Build Flatpak
         env:
           MANIFEST_PATH: ${{ steps.detect.outputs.manifest }}
@@ -97,7 +109,15 @@ jobs:
           FRIENDLYHUB_API_URL: ${{ secrets.FRIENDLYHUB_API_URL }}
           WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
           SUBMISSION_ID: ${{ inputs.submission_id || 'manual' }}
-        run: friendlyhub-build
+        run: |
+          docker run --rm --privileged \
+            -v "${GITHUB_WORKSPACE}:/workspace" \
+            -w /workspace \
+            -e MANIFEST_PATH -e APP_ID -e ARCH \
+            -e FLAT_MANAGER_TOKEN -e REPO_NAME \
+            -e FRIENDLYHUB_API_URL -e WEBHOOK_SECRET -e SUBMISSION_ID \
+            -e GITHUB_SERVER_URL -e GITHUB_REPOSITORY -e GITHUB_RUN_ID \
+            "ghcr.io/friendlyhub/flatpak-builder:${ARCH}"
 
       - name: Notify failure
         if: failure()

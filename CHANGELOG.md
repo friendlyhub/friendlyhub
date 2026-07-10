@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Components are versioned independently: **server**, **web**, **builder-image**, **infra**.
 
+## [server-0.1.3] - 2026-07-10
+
+### Fixed
+- x86_64 Flatpak builds were failing during dependency installation with `Delta requires 1.7 GB free space, but only 592.2 MB available`. The app-repo build workflow ran inside a job-level GitHub Actions `container:`, whose Flatpak install filesystem was limited to a few hundred MB even though the runner host had ~90 GB free. The workflow — compiled into the server via `include_str!` and pushed to each app repo on submission — now runs the builder image with `docker run` on the host, preceded by a disk-cleanup step, so Flatpak installs into host-backed storage with ample space. aarch64 builds, on roomier ARM runners, were unaffected.
+
 ## [server-0.1.2] - 2026-04-20
 
 ### Fixed
