@@ -8,6 +8,12 @@ DATA_DIR="${DATA_DIR:-/var/data/flatmanager}"
 DB_URL="${DATABASE_URL:?DATABASE_URL must be set}"
 FM_SECRET="${FLAT_MANAGER_SECRET:-$(openssl rand -base64 32)}"
 FM_PORT="${FM_PORT:-8080}"
+# save_file() does blocking write_all/persist straight on the actix worker thread, so an
+# upload to EFS parks that worker for its whole duration. flat-manager defaults to
+# available_parallelism() (2 here), which meant one in-flight upload could leave a second
+# builder's request unread until actix's 5s client_request_timeout fired it back as a 408.
+# These threads are I/O-bound, not CPU-bound, so oversubscribing them is the point.
+FM_WORKERS="${FM_WORKERS:-16}"
 CONFIG_PATH="${REPO_CONFIG:-${DATA_DIR}/config.json}"
 GPG_HOMEDIR="${DATA_DIR}/gpg"
 GPG_KEY_ID=""
@@ -71,6 +77,7 @@ cat > "${CONFIG_PATH}" <<EOF
     },
     "host": "0.0.0.0",
     "port": ${FM_PORT},
+    "workers": ${FM_WORKERS},
     "delay-update-secs": 10,
     "database-url": "${SAFE_DB_URL}",
     "build-repo-base": "${DATA_DIR}/build-repo",
@@ -97,6 +104,7 @@ fi
 
 echo "Data directory: ${DATA_DIR}"
 echo "Listening on port: ${FM_PORT}"
+echo "HTTP workers: ${FM_WORKERS}"
 
 # Start the purge server (handles OSTree ref deletion on app delete)
 echo "--- Starting purge server on port 8081 ---"

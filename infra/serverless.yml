@@ -701,8 +701,11 @@ resources:
       Type: AWS::ECS::TaskDefinition
       Properties:
         Family: friendlyhub-flatmanager-${self:provider.stage}
-        Cpu: "256"
-        Memory: "512"
+        # 0.25 vCPU could not keep up once apps got large: one arch's upload phase
+        # pinned the task, and the other arch's request head missed actix's 5s
+        # client_request_timeout, which returns a bare 408 before routing or logging.
+        Cpu: "1024"
+        Memory: "2048"
         NetworkMode: awsvpc
         RequiresCompatibilities:
           - FARGATE
