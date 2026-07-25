@@ -29,6 +29,15 @@ on:
         type: string
         default: "x86_64"
 
+# Each arch is dispatched as its own run, so without this they overlap. flat-manager writes
+# uploads synchronously on its actix worker threads, so a builder arriving mid-upload can have
+# its request head sit unread past actix's 5s timeout and come back as a bare 408. Serialising
+# per app keeps the two upload phases apart. Never cancel-in-progress -- that would kill the
+# arch that is already uploading.
+concurrency:
+  group: friendlyhub-build-${{ inputs.app_id }}
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Build (${{ inputs.arch }})
