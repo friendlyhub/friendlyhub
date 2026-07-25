@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Components are versioned independently: **server**, **web**, **builder-image**, **infra**.
 
+## [server-0.1.5] - 2026-07-25
+
+### Fixed
+- A single dangerous `finish-arg` was reported twice, as both a manifest lint warning and a permissions audit finding, because `manifest::validate` and `checks::check_permissions_audit` each carried their own hardcoded list of the same four permissions with different wording. Permissions are now the audit check's job alone; `manifest::check_permissions` is gone.
+
+### Changed
+- The permissions audit is now backed by `shared/flatpak-permissions.catalog.json`, the same catalog the web frontend uses to render permission badges, replacing a four-pattern hardcoded list. New `services/permissions.rs` ports the frontend's `classifyPermission`: exact matches beat regex matches, ties break on priority then match-expression length then rule id, and the `[mode_suffix]`/`[path_suffix]`/`[device_suffix]`/`[class_suffix]` description templating is reproduced. A fixture table of args to expected rule and severity is asserted in both `services/permissions.rs` and `web/src/utils/permissions.test.ts`, so drift between the two readers fails a test.
+- Coverage goes from 4 patterns to the catalog's 26 sensitive rules, so apps using `--socket=session-bus`, `--filesystem=home`, `--device=input`, `--allow=devel` and similar will now be flagged where they previously passed silently. Warnings do not block publishing, but expect a noisier review queue.
+- Adds the `fancy-regex` dependency rather than `regex`: two catalog patterns (`filesystem-absolute-run`, `filesystem-absolute-generic`) use negative lookahead to exclude paths such as `/run/flatpak`, which the `regex` crate does not support. Rewriting those patterns would have reintroduced exactly the server/frontend divergence this change removes.
+
 ## [server-0.1.4] - 2026-07-25
 
 ### Fixed

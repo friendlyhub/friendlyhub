@@ -87,9 +87,6 @@ pub fn validate(manifest: &Value) -> ValidationResult {
         warnings.push("No finish-args specified; app will have no permissions".into());
     }
 
-    // Check for dangerous permissions
-    check_permissions(&parsed.finish_args, &mut warnings);
-
     ValidationResult {
         valid: errors.is_empty(),
         errors,
@@ -130,23 +127,6 @@ fn validate_app_id(app_id: &str, errors: &mut Vec<String>) {
                 "app-id '{app_id}' contains invalid characters (only alphanumeric, _ and - allowed)"
             ));
             return;
-        }
-    }
-}
-
-fn check_permissions(finish_args: &[String], warnings: &mut Vec<String>) {
-    let dangerous = [
-        ("--filesystem=host", "Full host filesystem access"),
-        ("--filesystem=/", "Root filesystem access"),
-        ("--socket=system-bus", "Full system D-Bus access"),
-        ("--device=all", "Access to all devices"),
-    ];
-
-    for arg in finish_args {
-        for (pattern, desc) in &dangerous {
-            if arg == *pattern {
-                warnings.push(format!("Dangerous permission: {desc} ({pattern})"));
-            }
         }
     }
 }
@@ -286,29 +266,14 @@ mod tests {
     }
 
     #[test]
-    fn dangerous_filesystem_host_warns() {
+    fn lint_does_not_report_permissions() {
+        // Permissions are the permissions_audit check's job; reporting them here
+        // too made a single dangerous finish-arg appear as two separate findings.
         let mut m = valid_manifest();
-        m["finish-args"] = json!(["--filesystem=host"]);
+        m["finish-args"] = json!(["--filesystem=host", "--device=all"]);
         let result = validate(&m);
         assert!(result.valid);
-        assert!(result.warnings.iter().any(|w| w.contains("host filesystem")));
-    }
-
-    #[test]
-    fn dangerous_device_all_warns() {
-        let mut m = valid_manifest();
-        m["finish-args"] = json!(["--device=all"]);
-        let result = validate(&m);
-        assert!(result.valid);
-        assert!(result.warnings.iter().any(|w| w.contains("all devices")));
-    }
-
-    #[test]
-    fn safe_permissions_no_warning() {
-        let m = valid_manifest(); // has --share=ipc, --socket=fallback-x11
-        let result = validate(&m);
-        assert!(result.valid);
-        assert!(!result.warnings.iter().any(|w| w.contains("Dangerous")));
+        assert!(result.warnings.is_empty(), "got: {:?}", result.warnings);
     }
 
     #[test]

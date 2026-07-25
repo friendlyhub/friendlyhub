@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::db::Db;
 use crate::errors::AppError;
 use crate::models::helpers;
-use crate::services::manifest;
+use crate::services::{manifest, permissions};
 use std::collections::HashMap;
 
 /// Result of a single automated check.
@@ -159,25 +159,17 @@ fn check_permissions_audit(manifest_value: &Value) -> CheckResult {
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
 
-    let dangerous_patterns = [
-        ("--filesystem=host", "Full host filesystem access — app can read/write all user files"),
-        ("--filesystem=/", "Root filesystem access — app can read/write the entire system"),
-        ("--socket=system-bus", "Full system D-Bus access — can control system services"),
-        ("--device=all", "Access to all devices including input devices"),
-        ("--share=network", ""),
-    ];
-
-    let mut flagged = Vec::new();
-    for arg in &finish_args {
-        for (pattern, desc) in &dangerous_patterns {
-            if arg == *pattern && !desc.is_empty() {
-                flagged.push(serde_json::json!({
-                    "permission": pattern,
-                    "concern": desc,
-                }));
-            }
-        }
-    }
+    let flagged: Vec<Value> = finish_args
+        .iter()
+        .map(|arg| permissions::classify(arg))
+        .filter(|r| r.severity == permissions::Severity::Sensitive)
+        .map(|r| {
+            serde_json::json!({
+                "permission": r.permission,
+                "concern": r.description,
+            })
+        })
+        .collect();
 
     if !flagged.is_empty() {
         CheckResult {
@@ -322,6 +314,38 @@ mod tests {
         let m = json!({"finish-args": ["--share=network"]});
         let result = check_permissions_audit(&m);
         assert_eq!(result.status, "passed");
+    }
+
+    #[test]
+    fn permissions_audit_covers_catalog_beyond_the_old_hardcoded_list() {
+        // --socket=session-bus is sensitive in the shared catalog but was invisible
+        // to the four-pattern list this check used to carry.
+        let m = json!({"finish-args": ["--socket=session-bus"]});
+        let result = check_permissions_audit(&m);
+        assert_eq!(result.status, "warning");
+    }
+
+    #[test]
+    fn permissions_audit_details_carry_catalog_wording() {
+        let m = json!({"finish-args": ["--device=all"]});
+        let result = check_permissions_audit(&m);
+        let flagged = result.details.unwrap()["flagged_permissions"].clone();
+        assert_eq!(flagged[0]["permission"], "--device=all");
+        assert_eq!(
+            flagged[0]["concern"],
+            "Allows the app to access nearly all hardware devices."
+        );
+    }
+
+    #[test]
+    fn manifest_lint_no_longer_duplicates_permission_findings() {
+        let mut m = full_manifest();
+        m["finish-args"] = json!(["--device=all"]);
+        let results = run_checks(&m);
+        let lint = results.iter().find(|r| r.check_name == "manifest_lint").unwrap();
+        let audit = results.iter().find(|r| r.check_name == "permissions_audit").unwrap();
+        assert_eq!(lint.status, "passed");
+        assert_eq!(audit.status, "warning");
     }
 
     #[test]

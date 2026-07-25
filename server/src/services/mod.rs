@@ -6,4 +6,5 @@ pub mod install_counts;
 pub mod manifest;
 pub mod metainfo;
 pub mod notifications;
+pub mod permissions;
 pub mod verification;
