@@ -1,4 +1,4 @@
-import catalog from '../data/flatpak-permissions.catalog.json';
+import catalog from '../../../shared/flatpak-permissions.catalog.json';
 
 export type Severity = 'safe' | 'caution' | 'sensitive';
 

@@ -18,6 +18,10 @@ export default defineConfig({
     },
   },
   server: {
+    fs: {
+      // shared/ holds the permission catalog, read by both web and server
+      allow: ['..'],
+    },
     proxy: {
       '/api': {
         target: process.env.API_URL || 'http://localhost:3000',
