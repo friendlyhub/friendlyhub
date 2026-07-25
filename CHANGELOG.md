@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Components are versioned independently: **server**, **web**, **builder-image**, **infra**.
 
+## [server-0.1.4] - 2026-07-25
+
+### Fixed
+- Multi-arch submissions could fail on the second architecture with `status 408` and an empty, non-JSON body from flat-manager's `missing_objects` endpoint. Each arch is dispatched as its own workflow run roughly two minutes apart, so the second builder routinely arrived while the first was still uploading. The build workflow — compiled into the server via `include_str!` and pushed to each app repo on submission — now declares a per-app `concurrency` group so the two arch runs queue instead of overlapping. `cancel-in-progress` is explicitly false, since cancelling would kill the arch already mid-upload. Costs wall-clock per submission, as the arch runs no longer overlap.
+
+## [infra-0.1.2] - 2026-07-25
+
+### Fixed
+- flat-manager ran on actix's default worker count, which resolves to `available_parallelism()` — 2 on this task. Its `save_file()` is declared `async` but performs blocking `write_all`, `persist` and `set_permissions` directly on the worker thread, and against EFS each of those is a network round trip, so one upload parked a worker for the full 2-20 s it ran. A second builder whose connection was assigned to a parked worker had its request head go unread until actix's 5 s `client_request_timeout` returned a bare 408. That fires below the router, so the body was empty and the request never reached the access log — the failed build IDs had zero CloudWatch entries despite their `POST /api/v1/build` succeeding moments earlier. The generated config now sets `workers` to 16, overridable via `FM_WORKERS`; these threads are I/O-bound, so oversubscribing them is intended. This shortens the odds rather than eliminating them — actix assigns connections round-robin and a thread blocked in sync code still reports itself as available — so it backs up the workflow-level `concurrency` group rather than replacing it.
+
+### Changed
+- flat-manager Fargate task raised from 0.25 vCPU / 512 MB to 1 vCPU / 2 GB. At the old size the task sat at 96-102% CPU for the duration of any upload, sharing that quota with the `aws s3 sync` sidecar: `missing_objects` took 3.8-5.4 s per chunk and uploads 8-50 s each, against ~2.0 s and 2-19 s afterwards. Throughput only — this did not address the 408 above, which was blocked I/O rather than CPU starvation.
+
 ## [server-0.1.3] - 2026-07-10
 
 ### Fixed
