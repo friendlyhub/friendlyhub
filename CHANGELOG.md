@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Components are versioned independently: **server**, **web**, **builder-image**, **infra**.
 
+## [web-0.1.2] - 2026-07-25
+
+### Fixed
+- Automated check results showed only a count — "1 warning(s)", "1 potentially dangerous permission(s) detected" — with no way to see what had been flagged. The server had been storing and returning the specifics in each check's `details` field all along, and the frontend `CheckResult` type already declared it; `AutomatedChecks` simply never rendered it. The component now expands each check's findings inline, normalising the three shapes the server emits (`errors`/`warnings` from manifest lint, `flagged_permissions` from the permissions audit, `concerns` from metadata completeness). Findings are always expanded rather than behind a disclosure: passing checks emit no details at all, so the clean case is unchanged, and hiding them one click deep was the original complaint. Fixes both the reviewer's screen and the developer's own submission detail, which share the component.
+
+### Added
+- The manifest editor on the submission screen now reports non-blocking warnings, not just missing required fields: absent `runtime-version`, empty `finish-args`, and any `finish-arg` the shared permission catalog rates *sensitive*. These reuse the validation panel already present in `ManifestForm`, whose warning and info branches were written but previously unreachable, and are worded identically to what the reviewer will see post-submission.
+
+### Changed
+- `flatpak-permissions.catalog.json` and its schema moved from `web/src/data/` to `shared/`, since the Rust server now reads the same file. Vite's dev-server `fs.allow` is widened to the repo root to serve it; the production build needed no change.
+
 ## [server-0.1.5] - 2026-07-25
 
 ### Fixed

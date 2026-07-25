@@ -1,5 +1,7 @@
 // Flatpak manifest schema helpers for the dual-pane editor
 
+import { classifyPermission } from './permissions';
+
 export interface FieldDef {
   key: string;
   label: string;
@@ -225,6 +227,48 @@ export function validateRequired(m: Manifest): string[] {
     missing.push('Modules (at least one)');
   }
   return missing;
+}
+
+export interface ValidationMessage {
+  severity: 'error' | 'warning' | 'info';
+  field: string;
+  message: string;
+}
+
+// Non-blocking warnings, mirroring the checks the server runs after submission
+// (services/manifest.rs and services/checks.rs) so nothing is a surprise later.
+export function validateManifest(m: Manifest): ValidationMessage[] {
+  const messages: ValidationMessage[] = [];
+
+  if (!m['runtime-version']) {
+    messages.push({
+      severity: 'warning',
+      field: 'Runtime',
+      message: 'No runtime-version specified; build may use an unpredictable version',
+    });
+  }
+
+  const finishArgs = Array.isArray(m['finish-args']) ? m['finish-args'] : [];
+  if (finishArgs.length === 0) {
+    messages.push({
+      severity: 'warning',
+      field: 'Permissions',
+      message: 'No finish-args specified; app will have no permissions',
+    });
+  }
+
+  for (const arg of finishArgs) {
+    const result = classifyPermission(arg);
+    if (result.severity === 'sensitive') {
+      messages.push({
+        severity: 'warning',
+        field: 'Permissions',
+        message: `${result.permission} — ${result.description}`,
+      });
+    }
+  }
+
+  return messages;
 }
 
 // Create a blank manifest with defaults

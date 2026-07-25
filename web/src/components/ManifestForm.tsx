@@ -7,17 +7,13 @@ import {
   MODULE_FIELDS,
   SOURCE_TYPES,
   validateRequired,
+  validateManifest,
   type Manifest,
   type ManifestModule,
   type FieldDef,
+  type ValidationMessage,
 } from '../utils/manifest';
 import { classifyPermission, getOverallSeverity, SEVERITY_CONFIG } from '../utils/permissions';
-
-interface ValidationMessage {
-  severity: 'error' | 'warning' | 'info';
-  field: string;
-  message: string;
-}
 
 interface ManifestFormProps {
   manifest: Manifest;
@@ -525,6 +521,7 @@ export default function ManifestForm({ manifest, onChange, lockedAppId }: Manife
   for (const label of missingFields) {
     validationMessages.push({ severity: 'error', field: 'Required', message: `${label} is required` });
   }
+  validationMessages.push(...validateManifest(manifest));
 
   // Determine which optional fields are currently active in the manifest
   const activeOptionalKeys = new Set<string>();
