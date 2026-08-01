@@ -701,11 +701,11 @@ resources:
       Type: AWS::ECS::TaskDefinition
       Properties:
         Family: friendlyhub-flatmanager-${self:provider.stage}
-        # 0.25 vCPU could not keep up once apps got large: one arch's upload phase
-        # pinned the task, and the other arch's request head missed actix's 5s
-        # client_request_timeout, which returns a bare 408 before routing or logging.
-        Cpu: "1024"
-        Memory: "2048"
+        # 0.25 vCPU could not keep up with concurrent multi-arch uploads. 0.5 vCPU
+        # preserves twice that original capacity, while the summary-gated S3 sync
+        # removes the recursive EFS scan that previously competed for CPU and I/O.
+        Cpu: "512"
+        Memory: "1024"
         NetworkMode: awsvpc
         RequiresCompatibilities:
           - FARGATE
@@ -760,21 +760,62 @@ resources:
               - -c
             Command:
               - |
-                while true; do
+                REPO_PATH=/var/data/flatmanager/repo
+                SUMMARY_PATH="${REPO_PATH}/summary"
+                LAST_SUMMARY_FINGERPRINT=__startup__
+                NEXT_COUNTS_AT=0
+
+                summary_fingerprint() {
+                  if [ -f "${SUMMARY_PATH}" ]; then
+                    cksum "${SUMMARY_PATH}" 2>/dev/null || echo unreadable
+                  else
+                    echo missing
+                  fi
+                }
+
+                sync_repo() {
                   echo "Starting S3 sync..."
-                  SYNC_OUT=$(aws s3 sync /var/data/flatmanager/repo "s3://${BUCKET}/repo" --delete --exclude "friendlyhub.flatpakrepo" 2>&1)
-                  if echo "$SYNC_OUT" | grep -q "upload:\|delete:"; then
+                  if ! SYNC_OUT=$(aws s3 sync "${REPO_PATH}" "s3://${BUCKET}/repo" --delete --exclude "friendlyhub.flatpakrepo" 2>&1); then
+                    echo "S3 sync failed: ${SYNC_OUT}" >&2
+                    return 1
+                  fi
+
+                  if [ -n "${SYNC_OUT}" ]; then
+                    echo "${SYNC_OUT}"
+                  fi
+
+                  if echo "${SYNC_OUT}" | grep -q "upload:\|delete:"; then
                     echo "Changes detected, invalidating CloudFront cache..."
                     aws cloudfront create-invalidation --distribution-id "${CF_DISTRIBUTION}" --paths "/repo/summary" "/repo/summary.sig" "/repo/summary.idx" "/repo/summary.idx.sig" "/repo/summaries/*" "/repo/appstream/*" --no-cli-pager 2>&1
                     echo "Invalidation requested"
                     echo "Refreshing appstream metadata..."
                     python3 -c "import urllib.request; r=urllib.request.urlopen(urllib.request.Request('${API_URL}/api/v1/internal/refresh-appstream', method='POST', data=b'')); print(f'HTTP {r.status}: {r.read().decode()}')" 2>&1 || echo "Appstream refresh failed (non-fatal)"
                   else
-                    echo "No changes"
+                    echo "S3 mirror already current"
                   fi
-                  echo "Processing install counts..."
-                  python3 -c "import urllib.request; r=urllib.request.urlopen(urllib.request.Request('${API_URL}/api/v1/internal/process-install-counts', method='POST', data=b'')); print(f'Install counts: {r.read().decode()}')" 2>&1 || echo "Install count processing failed (non-fatal)"
-                  sleep 60
+                }
+
+                while true; do
+                  CURRENT_SUMMARY_FINGERPRINT=$(summary_fingerprint)
+                  if [ "${CURRENT_SUMMARY_FINGERPRINT}" != "${LAST_SUMMARY_FINGERPRINT}" ]; then
+                    echo "Repository summary changed; a full sync is required"
+                    if sync_repo; then
+                      LAST_SUMMARY_FINGERPRINT="${CURRENT_SUMMARY_FINGERPRINT}"
+                    else
+                      echo "The full sync will be retried after ${SYNC_INTERVAL_SECONDS}s" >&2
+                    fi
+                  else
+                    echo "Repository summary unchanged; skipping full sync"
+                  fi
+
+                  NOW=$(date +%s)
+                  if [ "${NOW}" -ge "${NEXT_COUNTS_AT}" ]; then
+                    echo "Processing install counts..."
+                    python3 -c "import urllib.request; r=urllib.request.urlopen(urllib.request.Request('${API_URL}/api/v1/internal/process-install-counts', method='POST', data=b'')); print(f'Install counts: {r.read().decode()}')" 2>&1 || echo "Install count processing failed (non-fatal)"
+                    NEXT_COUNTS_AT=$((NOW + COUNT_INTERVAL_SECONDS))
+                  fi
+
+                  sleep "${SYNC_INTERVAL_SECONDS}"
                 done
             Environment:
               - Name: BUCKET
@@ -783,6 +824,14 @@ resources:
                 Value: !Ref OstreeRepoCDN
               - Name: API_URL
                 Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+              # Poll only the small OSTree summary file once a minute. A recursive
+              # aws s3 sync is run on startup and after a publish/purge changes it.
+              - Name: SYNC_INTERVAL_SECONDS
+                Value: "60"
+              # CloudFront delivers access logs in batches, so processing them
+              # every minute only created repeated empty S3 listings.
+              - Name: COUNT_INTERVAL_SECONDS
+                Value: "3600"
             MountPoints:
               - SourceVolume: flatmanager-data
                 ContainerPath: /var/data/flatmanager

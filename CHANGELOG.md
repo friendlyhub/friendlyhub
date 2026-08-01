@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Components are versioned independently: **server**, **web**, **builder-image**, **infra**.
 
+## [infra-0.1.3] - 2026-08-01
+
+### Changed
+- The OSTree S3 mirror sidecar now checks the repository's small `summary` file once a minute and runs the recursive `aws s3 sync` only on startup or when that summary changes. The previous loop scanned the entire EFS repository every minute even when nothing had been published, producing roughly 100-186 MB of metered metadata reads per minute. Steady-state metadata reads fell to approximately 0.02 MB per minute after deployment; failed syncs retain the old fingerprint so the next poll retries them.
+- CloudFront install-count logs are processed hourly instead of every minute. CloudFront delivers these logs in batches, so the minute-level schedule mostly repeated empty S3 listings without making counts meaningfully fresher.
+- The flat-manager Fargate task is reduced from 1 vCPU / 2 GB to 0.5 vCPU / 1 GB after removing the recursive scan workload. This remains twice the original CPU allocation that failed under concurrent uploads, while observed memory use was well below the new limit.
+
 ## [web-0.1.2] - 2026-07-25
 
 ### Fixed
