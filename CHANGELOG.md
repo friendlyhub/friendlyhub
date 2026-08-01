@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Components are versioned independently: **server**, **web**, **builder-image**, **infra**.
 
+## [server-0.1.6] - 2026-08-01
+
+### Changed
+- Every GitHub Action pinned in this repo moved off the Node 20 runtime, which GitHub now warns is deprecated: `actions/checkout` v4 to v7, `actions/github-script` v7 to v9, `docker/login-action` v3 to v4, `docker/build-push-action` v6 to v7. The warning app maintainers were seeing came from `build-templates/build.yml`, which is compiled into the server via `include_str!` and pushed to each app repo on submission, so it was never theirs to fix. Existing apps pick up the new pins on their next submission; an app that never submits again keeps warning until it does. Of the breaking changes in those majors, `build-push-action` v7 drops `DOCKER_BUILD_NO_SUMMARY` and `DOCKER_BUILD_EXPORT_RETENTION_DAYS`, and `github-script` v9 drops `require('@actions/github')` in favour of an injected `getOctokit`; none of the three were used here.
+
+### Fixed
+- The submissions repo's PR validation ran on `pull_request_target` and then checked out the fork's head commit, handing untrusted code a job holding `pull-requests: write` and `WEBHOOK_SECRET`. The manifest filename it detected is attacker-controlled — it comes from the PR's own tree, and only the containing directory was pattern-validated — yet it was interpolated directly into a `run:` block as `${{ steps.detect.outputs.manifest }}`. A submitted file named to include shell metacharacters therefore ran commands with the webhook secret in scope. `actions/checkout` v7 refuses fork checkouts under `pull_request_target` unless `allow-unsafe-pr-checkout` is set; rather than opt back in, the job no longer checks the head out at all. It resolves the changed directory from `pulls/{number}/files` and pulls just the manifest and metainfo through the contents API, which serves the head commit from this repo via `refs/pull/N/head` while the PR is open, writing them to fixed local paths. Directory entry names are filtered to `[A-Za-z0-9._-]` before being interpolated into a request URL. No filename originating from a PR now reaches a shell or the filesystem.
+
 ## [web-0.1.2] - 2026-07-25
 
 ### Fixed
