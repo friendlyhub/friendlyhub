@@ -566,6 +566,31 @@ async fn build_complete(
                         submission_id = %sub.id,
                         "One or more arch builds failed"
                     );
+
+                    // A failed submission cannot be reviewed or published. Purge
+                    // every flat-manager build ID that made it back to us so its
+                    // temporary EFS repository does not remain indefinitely. A
+                    // periodic sweeper handles builds that failed before their ID
+                    // could be reported by the workflow.
+                    let build_ids: Vec<i32> = builds
+                        .values()
+                        .filter_map(|build| build.fm_build_id)
+                        .collect();
+                    for build_id in build_ids {
+                        match state.flat_manager.purge_build(build_id).await {
+                            Ok(()) => tracing::info!(
+                                submission_id = %sub.id,
+                                fm_build_id = build_id,
+                                "Purged temporary build repository after submission failure"
+                            ),
+                            Err(error) => tracing::warn!(
+                                submission_id = %sub.id,
+                                fm_build_id = build_id,
+                                error = %error,
+                                "Failed to purge temporary build repository; orphan cleanup may be required"
+                            ),
+                        }
+                    }
                 }
             }
         }

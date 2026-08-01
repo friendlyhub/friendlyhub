@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Components are versioned independently: **server**, **web**, **builder-image**, **infra**.
 
+## [server-0.1.6] - 2026-08-02
+
+### Fixed
+- When a multi-architecture submission reaches `build_failed`, every flat-manager build ID reported by its workflows is now purged through flat-manager's supported API. This removes the temporary EFS repositories while keeping flat-manager's PostgreSQL state consistent. Purge errors remain non-fatal to the failure webhook and are logged; the infrastructure sweep independently handles builds that failed before their ID could be reported.
+
+## [infra-0.1.4] - 2026-08-02
+
+### Added
+- The ECS sidecar now sweeps flat-manager builds hourly and purges unpublished repositories that have remained in `Failed` or `Uploading` for more than 24 hours. `Ready` unpublished builds are deliberately excluded because they may still be awaiting review; flat-manager already removes a build's files when publishing succeeds.
+
+### Changed
+- Removed the historical temporary build backlog through flat-manager's purge API, retaining the two builds associated with active approved submissions. The EFS `build-repo` directory fell from approximately 1.016 GB to 12.6 MB without changing the permanent published repository.
+
 ## [infra-0.1.3] - 2026-08-01
 
 ### Changed

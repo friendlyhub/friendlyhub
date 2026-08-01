@@ -168,4 +168,41 @@ impl FlatManagerClient {
 
         Ok(())
     }
+
+    /// Delete a temporary build repository after it is no longer publishable.
+    /// flat-manager updates its PostgreSQL state as part of this operation, so
+    /// callers must use the API rather than removing the EFS directory directly.
+    pub async fn purge_build(&self, build_id: i32) -> Result<(), AppError> {
+        let base_url = self.base_url().await?;
+        let resp = self
+            .client
+            .post(format!("{base_url}/api/v1/build/{build_id}/purge"))
+            .bearer_auth(&self.token)
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("flat-manager build purge failed: {e}")))?;
+
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        if !status.is_success() {
+            return Err(AppError::Internal(format!(
+                "flat-manager build purge returned {status}: {body}"
+            )));
+        }
+
+        let result: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
+            AppError::Internal(format!("flat-manager build purge returned invalid JSON: {e}"))
+        })?;
+        if result.get("repo_state").and_then(|state| state.as_i64()) != Some(5) {
+            let reason = result
+                .get("repo_state_reason")
+                .and_then(|reason| reason.as_str())
+                .unwrap_or("unknown reason");
+            return Err(AppError::Internal(format!(
+                "flat-manager build purge did not complete: {reason}"
+            )));
+        }
+
+        Ok(())
+    }
 }

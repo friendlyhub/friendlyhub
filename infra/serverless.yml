@@ -764,6 +764,7 @@ resources:
                 SUMMARY_PATH="${REPO_PATH}/summary"
                 LAST_SUMMARY_FINGERPRINT=__startup__
                 NEXT_COUNTS_AT=0
+                NEXT_CLEANUP_AT=0
 
                 summary_fingerprint() {
                   if [ -f "${SUMMARY_PATH}" ]; then
@@ -795,6 +796,76 @@ resources:
                   fi
                 }
 
+                cleanup_builds() {
+                  python3 <<'PY'
+                import datetime
+                import json
+                import os
+                import urllib.error
+                import urllib.request
+
+                base_url = os.environ.get("FLAT_MANAGER_URL", "http://localhost:8080")
+                token = os.environ["FLAT_MANAGER_TOKEN"]
+                retention_seconds = int(os.environ["BUILD_RETENTION_SECONDS"])
+                now = datetime.datetime.now(datetime.timezone.utc)
+                headers = {"Authorization": f"Bearer {token}"}
+
+                request = urllib.request.Request(f"{base_url}/api/v1/build", headers=headers)
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    builds = json.load(response)
+
+                candidates = []
+                for build in builds:
+                    created = datetime.datetime.fromisoformat(build["created"])
+                    if created.tzinfo is None:
+                        created = created.replace(tzinfo=datetime.timezone.utc)
+                    if (now - created).total_seconds() < retention_seconds:
+                        continue
+
+                    repo_state = build["repo_state"]
+                    published_state = build["published_state"]
+                    if repo_state == 3 and published_state != 2:
+                        reason = "failed"
+                    elif repo_state == 0:
+                        reason = "abandoned upload"
+                    else:
+                        # Ready, unpublished builds may still be awaiting review.
+                        continue
+                    candidates.append((build["id"], reason))
+
+                if not candidates:
+                    print("Build cleanup: no expired temporary repositories")
+
+                for build_id, reason in candidates:
+                    purge = urllib.request.Request(
+                        f"{base_url}/api/v1/build/{build_id}/purge",
+                        headers=headers,
+                        method="POST",
+                    )
+                    try:
+                        with urllib.request.urlopen(purge, timeout=300) as response:
+                            result = json.load(response)
+                        if result.get("repo_state") == 5:
+                            print(
+                                f"Build cleanup: purged build {build_id} ({reason})",
+                                flush=True,
+                            )
+                        else:
+                            print(
+                                f"Build cleanup: build {build_id} purge did not complete: "
+                                f"{result.get('repo_state_reason', 'unknown reason')}",
+                                flush=True,
+                            )
+                    except urllib.error.HTTPError as error:
+                        body = error.read().decode(errors="replace")
+                        print(
+                            f"Build cleanup: failed to purge build {build_id}: "
+                            f"HTTP {error.code}: {body}",
+                            flush=True,
+                        )
+                PY
+                }
+
                 while true; do
                   CURRENT_SUMMARY_FINGERPRINT=$(summary_fingerprint)
                   if [ "${CURRENT_SUMMARY_FINGERPRINT}" != "${LAST_SUMMARY_FINGERPRINT}" ]; then
@@ -815,6 +886,12 @@ resources:
                     NEXT_COUNTS_AT=$((NOW + COUNT_INTERVAL_SECONDS))
                   fi
 
+                  if [ "${NOW}" -ge "${NEXT_CLEANUP_AT}" ]; then
+                    echo "Cleaning up expired temporary build repositories..."
+                    cleanup_builds || echo "Build cleanup failed (non-fatal)"
+                    NEXT_CLEANUP_AT=$((NOW + BUILD_CLEANUP_INTERVAL_SECONDS))
+                  fi
+
                   sleep "${SYNC_INTERVAL_SECONDS}"
                 done
             Environment:
@@ -824,6 +901,10 @@ resources:
                 Value: !Ref OstreeRepoCDN
               - Name: API_URL
                 Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+              - Name: FLAT_MANAGER_URL
+                Value: "http://localhost:8080"
+              - Name: FLAT_MANAGER_TOKEN
+                Value: ${ssm:/friendlyhub/${self:provider.stage}/flat-manager-jwt}
               # Poll only the small OSTree summary file once a minute. A recursive
               # aws s3 sync is run on startup and after a publish/purge changes it.
               - Name: SYNC_INTERVAL_SECONDS
@@ -832,6 +913,12 @@ resources:
               # every minute only created repeated empty S3 listings.
               - Name: COUNT_INTERVAL_SECONDS
                 Value: "3600"
+              # Sweep hourly, but retain failed/abandoned temporary repositories
+              # for one day to leave a short diagnostic window.
+              - Name: BUILD_CLEANUP_INTERVAL_SECONDS
+                Value: "3600"
+              - Name: BUILD_RETENTION_SECONDS
+                Value: "86400"
             MountPoints:
               - SourceVolume: flatmanager-data
                 ContainerPath: /var/data/flatmanager
