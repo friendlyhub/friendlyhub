@@ -162,7 +162,6 @@ jobs:
           echo "metainfo_file=${METAINFO_FILE}" >> "$GITHUB_OUTPUT"
 
       - name: Create submission
-        id: submit
         env:
           FRIENDLYHUB_API_URL: ${{ secrets.FRIENDLYHUB_API_URL }}
           WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
@@ -211,24 +210,9 @@ jobs:
             exit 1
           fi
 
+          # /webhooks/submit dispatches build.yml itself, once per architecture it
+          # resolves for the app. Dispatching again from here would add a second
+          # x86_64 run against the same submission, racing the server's own run to
+          # report build-complete for that arch.
           SUBMISSION_ID=$(echo "${BODY}" | jq -r '.id')
-          echo "submission_id=${SUBMISSION_ID}" >> "$GITHUB_OUTPUT"
-          echo "Created submission: ${SUBMISSION_ID}"
-
-      - name: Trigger build
-        uses: actions/github-script@v9
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'build.yml',
-              ref: 'main',
-              inputs: {
-                submission_id: '${{ steps.submit.outputs.submission_id }}',
-                app_id: '${{ steps.detect.outputs.app_id }}',
-                manifest_path: '${{ steps.detect.outputs.manifest }}'
-              }
-            });
-            console.log('Build workflow triggered');
+          echo "Created submission: ${SUBMISSION_ID} -- builds triggered by the API"

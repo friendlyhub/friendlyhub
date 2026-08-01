@@ -274,8 +274,14 @@ async fn webhook_submit(
     submission::init_builds(&state.db, sub.id, &arches).await?;
 
     for arch in &arches {
+        // app_id is a required input of build.yml and is what its concurrency group
+        // keys on, so it has to be sent even though the dispatch already targets the
+        // app's own repo. manifest_path is left out on purpose: unlike a web
+        // submission, the developer owns these files and may not have named the
+        // manifest <app-id>.json, so build.yml auto-detects it.
         let inputs = serde_json::json!({
             "submission_id": sub.id.to_string(),
+            "app_id": payload.app_id,
             "arch": arch,
         });
         state
