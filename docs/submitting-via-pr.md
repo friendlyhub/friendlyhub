@@ -19,7 +19,7 @@ A standard Flatpak manifest in JSON or YAML. The key requirement is that your so
 ```yaml
 app-id: org.example.MyApp
 runtime: org.gnome.Platform
-runtime-version: '49'
+runtime-version: '51'
 sdk: org.gnome.Sdk
 command: myapp
 

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Components are versioned independently: **server**, **web**, **builder-image**, **infra**.
 
+## [builder-image-0.3.0] - 2026-10-01
+
+### Changed
+- Updated GNOME runtimes: added 51, dropped 49 (kept 50). GNOME 49 is not yet marked EOL on Flathub, but no FriendlyHub app targets it; any app that does still builds, since `flatpak-builder --install-deps-from=flathub` fetches uncached runtimes at build time.
+
 ## [server-0.1.6] - 2026-08-01
 
 ### Changed
