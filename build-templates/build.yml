@@ -45,7 +45,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # GitHub-hosted runners ship with ~30 GB of preinstalled tooling we never
       # use (Android SDK, .NET, GHC, CodeQL). Reclaim it so the builder image plus
