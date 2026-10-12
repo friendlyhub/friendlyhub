@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Components are versioned independently: **server**, **web**, **builder-image**, **infra**.
 
+## [infra-0.1.5] - 2026-10-12
+
+### Fixed
+- Deleting an app left its debug and translation refs in the published repo. The purge-server sidecar removed only `app/<app-id>/*`, but flatpak-builder publishes an app's debug info and translations as separate refs, `runtime/<app-id>.Debug/*` and `runtime/<app-id>.Locale/*`, so these stayed in the repo summary after the app itself was gone. `/purge` now deletes both extensions along with the app. It matches the exact `.Debug/` and `.Locale/` prefixes rather than everything under `runtime/<app-id>.`, so an app whose ID extends another's (such as `com.example.App.Tool`) is never caught by the other app's purge.
+
 ## [builder-image-0.3.0] - 2026-10-01
 
 ### Changed

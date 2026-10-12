@@ -6,7 +6,8 @@ via the same FLAT_MANAGER_SECRET used for JWT signing.
 
 Endpoints:
   POST /purge  {"app_id": "com.example.App"}
-    Deletes all OSTree refs matching app/{app_id}/* and
+    Deletes all OSTree refs matching app/{app_id}/* and the app's
+    runtime/{app_id}.Debug/* and runtime/{app_id}.Locale/* extensions, then
     regenerates the repo summary file.
 """
 
@@ -31,13 +32,21 @@ def delete_refs(app_id: str) -> list[str]:
     if result.returncode != 0:
         raise RuntimeError(f"ostree refs failed: {result.stderr}")
 
+    # flatpak-builder publishes the app's debug info and translations as
+    # separate runtime refs, which outlive the app if left behind.
+    prefixes = (
+        f"app/{app_id}/",
+        f"runtime/{app_id}.Debug/",
+        f"runtime/{app_id}.Locale/",
+    )
+
     deleted = []
     for ref in result.stdout.strip().split("\n"):
         ref = ref.strip()
         if not ref:
             continue
         # Match refs like app/com.example.App/x86_64/stable
-        if ref.startswith(f"app/{app_id}/") or ref == f"app/{app_id}":
+        if ref.startswith(prefixes) or ref == f"app/{app_id}":
             dr = subprocess.run(
                 ["ostree", "refs", "--repo", REPO_PATH, "--delete", ref],
                 capture_output=True, text=True,
