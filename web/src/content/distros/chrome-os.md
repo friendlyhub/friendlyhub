@@ -16,24 +16,31 @@ Press the Search (Launcher) key, type **Terminal** and launch the Terminal app. 
 sudo apt install flatpak
 ```
 
-## 3. Add the FriendlyHub repository
+## 3. Add the FriendlyHub and Flathub repositories
+
+FriendlyHub apps are built on runtimes (shared libraries) that are hosted on [Flathub](https://flathub.org), so you need both repositories. The quickest way to add them is our [setup script](/setup.sh), which adds whichever are missing and tells you what it changed:
 
 ```bash
-flatpak remote-add --if-not-exists friendlyhub https://dl.friendlyhub.org/repo/friendlyhub.flatpakrepo
+curl -fsSL https://friendlyhub.org/setup.sh | sh
 ```
 
-## 4. Add the FlatHub repository (optional)
+No curl? This does the same with wget:
 
-The majority of Linux apps are distributed on [Flathub](https://flathub.org). You'll probably want to add their repository too!
+```bash
+wget -qO- https://friendlyhub.org/setup.sh | sh
+```
+
+If you'd rather not run a script, add them yourself. If you already have Flathub, its command does nothing.
 
 ```bash
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+flatpak remote-add --if-not-exists friendlyhub https://dl.friendlyhub.org/repo/friendlyhub.flatpakrepo
 ```
 
-## 5. Restart Linux
+## 4. Restart Linux
 
 Right-click the terminal and choose **Shut down Linux**.
 
-## 6. Install apps
+## 5. Install apps
 
 You can now browse for apps from [friendlyhub.org](/apps) and click the install button to install them!

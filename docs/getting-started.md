@@ -55,15 +55,32 @@ If your distribution isn't listed above, you'll need to install Flatpak first. C
 
 ## Adding the FriendlyHub Remote
 
+FriendlyHub hosts apps only. The runtimes those apps are built on (such as `org.gnome.Platform` and `org.freedesktop.Platform`) come from Flathub, so you need both remotes.
+
+### With the setup script
+
+The quickest way is our [setup script](https://friendlyhub.org/setup.sh). Open a terminal and run:
+
+```bash
+curl -fsSL https://friendlyhub.org/setup.sh | sh
+```
+
+If you don't have `curl`, `wget -qO- https://friendlyhub.org/setup.sh | sh` does the same.
+
+The script adds whichever of the two remotes are missing, system-wide, and tells you what it changed. It recognises a remote by its URL, so a Flathub remote you added under a different name counts. If Flathub is set up but disabled, it re-enables it rather than adding a second copy. If both are already in place, it changes nothing and says so. It doesn't install Flatpak itself; if Flatpak is missing, it stops and points you to the instructions above.
+
+### By hand
+
 Open a terminal and run:
 
 ```bash
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 flatpak remote-add --if-not-exists friendlyhub https://dl.friendlyhub.org/repo/friendlyhub.flatpakrepo
 ```
 
-This downloads the repository configuration and GPG key. The `--if-not-exists` flag means it's safe to run even if you've already added it.
+These download each repository's configuration and GPG key. The `--if-not-exists` flag means they're safe to run even if you've already added either remote.
 
-Alternatively, you can download the [friendlyhub.flatpakrepo](https://dl.friendlyhub.org/repo/friendlyhub.flatpakrepo) file and open it with GNOME Software or your system's Flatpak handler.
+Alternatively, you can download the [flathub.flatpakrepo](https://dl.flathub.org/repo/flathub.flatpakrepo) and [friendlyhub.flatpakrepo](https://dl.friendlyhub.org/repo/friendlyhub.flatpakrepo) files and open them with GNOME Software or your system's Flatpak handler.
 
 ## Browsing Apps
 
@@ -95,7 +112,7 @@ flatpak install friendlyhub org.example.MyApp
 
 ### From GNOME Software or KDE Discover
 
-Once you've added the FriendlyHub remote, apps from FriendlyHub will appear in your software centre's search results alongside apps from other remotes. You can also click the **Install** button on any app's page on the FriendlyHub website, which opens a `.flatpakref` link that your software centre can handle directly.
+Once you've added the FriendlyHub and Flathub remotes, apps from FriendlyHub will appear in your software centre's search results alongside apps from other remotes. You can also click the **Install** button on any app's page on the FriendlyHub website, which opens a `.flatpakref` link that your software centre can handle directly.
 
 ## Updating Apps
 

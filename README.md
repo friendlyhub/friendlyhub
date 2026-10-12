@@ -8,7 +8,16 @@ FriendlyHub is an alternative Flatpak repository at [friendlyhub.org](https://fr
 
 ## Adding the FriendlyHub repo
 
+FriendlyHub hosts apps only. Their runtimes come from Flathub, so you need both remotes. The [setup script](web/public/setup.sh) adds whichever are missing and tells you what it changed:
+
 ```bash
+curl -fsSL https://friendlyhub.org/setup.sh | sh
+```
+
+Or add them yourself:
+
+```bash
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 flatpak remote-add --if-not-exists friendlyhub https://dl.friendlyhub.org/repo/friendlyhub.flatpakrepo
 ```
 

@@ -26,21 +26,28 @@ If you use KDE and want to use Discover to install apps:
 sudo pacman -S discover
 ```
 
-## 4. Add the FriendlyHub repository
+## 4. Add the FriendlyHub and Flathub repositories
+
+FriendlyHub apps are built on runtimes (shared libraries) that are hosted on [Flathub](https://flathub.org), so you need both repositories. The quickest way to add them is our [setup script](/setup.sh), which adds whichever are missing and tells you what it changed:
 
 ```bash
-flatpak remote-add --if-not-exists friendlyhub https://dl.friendlyhub.org/repo/friendlyhub.flatpakrepo
+curl -fsSL https://friendlyhub.org/setup.sh | sh
 ```
 
-## 5. Add the FlatHub repository (optional)
+No curl? This does the same with wget:
 
-The majority of Linux apps are distributed on [Flathub](https://flathub.org). You'll probably want to add their repository too!
+```bash
+wget -qO- https://friendlyhub.org/setup.sh | sh
+```
+
+If you'd rather not run a script, add them yourself. If you already have Flathub, its command does nothing.
 
 ```bash
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+flatpak remote-add --if-not-exists friendlyhub https://dl.friendlyhub.org/repo/friendlyhub.flatpakrepo
 ```
 
-## 6. Install apps
+## 5. Install apps
 
 You can now browse and install apps from FriendlyHub:
 

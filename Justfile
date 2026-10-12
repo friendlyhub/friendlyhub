@@ -27,7 +27,9 @@ deploy-web:
     cd web && npm run build
     cd docs && npm run build
     cp -r docs/.vitepress/dist/ web/dist/docs/
-    aws s3 sync web/dist/ s3://friendlyhub-prod-spabucket-gbz4esxpwx5u --delete --region {{region}}
+    aws s3 sync web/dist/ s3://friendlyhub-prod-spabucket-gbz4esxpwx5u --delete --exclude "setup.sh" --region {{region}}
+    # Served as text so the site's "setup script" links open it in the browser instead of downloading it
+    aws s3 cp web/dist/setup.sh s3://friendlyhub-prod-spabucket-gbz4esxpwx5u/setup.sh --content-type "text/plain; charset=utf-8" --region {{region}}
     aws cloudfront create-invalidation --distribution-id {{cf_spa}} --paths "/*" --region {{region}}
 
 # Run the Rust server locally

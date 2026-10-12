@@ -17,6 +17,18 @@ Components are versioned independently: **server**, **web**, **builder-image**, 
 ### Changed
 - `POST /internal/update-summary` now returns `{"summary_update_queued": true}` instead of `{"summary_updated": true}`, since the purge-server queues the regeneration and replies before it runs.
 
+## [web-0.1.3] - 2026-10-12
+
+### Added
+- A setup script at `https://friendlyhub.org/setup.sh` (source in `web/public/setup.sh`), run as `curl -fsSL https://friendlyhub.org/setup.sh | sh`. It adds the Flathub and FriendlyHub remotes system-wide and reports, for each, whether it was added, re-enabled or already set up, or says there was nothing to do. It recognises a remote by URL rather than name, so a Flathub remote added under another name counts. A remote that exists but is disabled is re-enabled rather than duplicated, which covers Fedora, where turning third-party repositories off disables Flathub and `remote-add --if-not-exists` would silently leave it that way. A `flathub` or `friendlyhub` remote pointing at some other URL stops the script with an error instead of being overwritten. It does not install Flatpak; if Flatpak is missing it stops and links to the per-distro setup pages. The whole body runs from `main` on the last line, so a truncated download executes nothing. It is POSIX `sh` and passes ShellCheck. `deploy-web` uploads it as `text/plain` rather than leaving S3 to guess `application/x-sh`, so the site's links to it open in the browser for reading instead of downloading.
+- The home page's Quick setup tab is now that one command. The per-distro setup pages, the getting-started guide and the README offer it first, with the existing manual instructions kept underneath for anyone who would rather not pipe a script into a shell. The distro pages also give the `wget` equivalent, since Debian and Ubuntu do not always ship `curl`.
+
+### Fixed
+- The command-line install instructions failed on any system without the Flathub remote. Every FriendlyHub app is built against a runtime hosted on Flathub (`org.gnome.Platform` or `org.freedesktop.Platform`), while the FriendlyHub repo carries only the apps and their `.Debug` and `.Locale` extensions, so `flatpak install friendlyhub <app-id>` stopped with "requires the runtime ... which was not found". The Install button was never affected: the `.flatpakref` it opens sets `RuntimeRepo` to Flathub, and Flatpak adds that remote during the install. A `.flatpakrepo` cannot do the same, because Flatpak reads `RuntimeRepo` only from ref files, so the fix belongs in the instructions. The install page's Manual Install section, the home page's repo-file downloads, the README and the getting-started guide now add Flathub alongside FriendlyHub. Every distro setup page now covers both: nine labelled the Flathub step "(optional)", and Fedora, Solus, elementary OS, AlmaLinux and CentOS Stream had no Flathub step at all. Their separate FriendlyHub and Flathub steps are merged into one. Linux Mint, Pop!_OS, Zorin OS and Manjaro ship with Flathub already configured, so their manual instructions still add FriendlyHub alone.
+
+### Changed
+- The home page's Quick and Guided setup tabs now share a single grid cell, so the panel takes the height of whichever tab is taller. Quick was previously overlaid on Guided with `absolute inset-0` and relied on Guided to set the height, so any Quick content taller than Guided spilled out of the panel.
+
 ## [infra-0.1.5] - 2026-10-12
 
 ### Fixed

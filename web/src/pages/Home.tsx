@@ -133,7 +133,7 @@ export default function Home() {
   const [setupTab, setSetupTab] = useState<'quick' | 'guided'>('quick');
   const [distroSearch, setDistroSearch] = useState('');
   const copyCommand = () => {
-    navigator.clipboard.writeText('flatpak remote-add --if-not-exists friendlyhub https://dl.friendlyhub.org/repo/friendlyhub.flatpakrepo');
+    navigator.clipboard.writeText('curl -fsSL https://friendlyhub.org/setup.sh | sh');
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -400,9 +400,9 @@ export default function Home() {
               ))}
             </div>
 
-            <div className="relative">
-              {/* Guided tab always rendered to set container height */}
-              <div className={setupTab === 'guided' ? '' : 'invisible'}>
+            <div className="grid">
+              {/* Both tabs share one grid cell so the container fits the taller one */}
+              <div className={`col-start-1 row-start-1 ${setupTab === 'guided' ? '' : 'invisible'}`}>
                 <p className="text-sm text-gray-400 mb-4">Choose your distribution</p>
                 <div className="grid grid-cols-4 sm:grid-cols-7 gap-3 mb-4">
                   {popularDistros.map((distro) => (
@@ -457,35 +457,43 @@ export default function Home() {
                   )}
                 </div>
               </div>
-              {/* Quick tab overlaid on top */}
-              {setupTab === 'quick' && (
-                <div className="absolute inset-0">
-                  <div className="relative w-full">
-                    <code className="block bg-gray-800 rounded-lg p-4 pr-12 text-sm font-mono text-emerald-400">
-                      flatpak remote-add --if-not-exists friendlyhub
-                      https://dl.friendlyhub.org/repo/friendlyhub.flatpakrepo
-                    </code>
-                    <button
-                      onClick={copyCommand}
-                      className="absolute top-3 right-3 p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 transition-colors cursor-pointer"
-                      title="Copy to clipboard"
-                    >
-                      {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-3">
-                    Copy and paste this to your terminal to add the FriendlyHub repository. Alternatively, download the repo file below.
-                  </p>
+              <div className={`col-start-1 row-start-1 ${setupTab === 'quick' ? '' : 'invisible'}`}>
+                <div className="relative w-full">
+                  <code className="block bg-gray-800 rounded-lg p-4 pr-12 text-sm font-mono text-emerald-400">
+                    curl -fsSL https://friendlyhub.org/setup.sh | sh
+                  </code>
+                  <button
+                    onClick={copyCommand}
+                    className="absolute top-3 right-3 p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 transition-colors cursor-pointer"
+                    title="Copy to clipboard"
+                  >
+                    {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-3">
+                  Paste this into your terminal. Our{' '}
+                  <a href="/setup.sh" className="underline hover:text-gray-300">setup script</a>{' '}
+                  adds the FriendlyHub repository, plus Flathub for the runtimes FriendlyHub apps are built on, and tells you what it changed. Rather not run a script? Download both repo files below.
+                </p>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <a
+                    href="https://dl.flathub.org/repo/flathub.flatpakrepo"
+                    download
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300 hover:text-white transition-colors"
+                  >
+                    <Download className="w-4 h-4" />
+                    flathub.flatpakrepo
+                  </a>
                   <a
                     href="https://dl.friendlyhub.org/repo/friendlyhub.flatpakrepo"
                     download
-                    className="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300 hover:text-white transition-colors"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300 hover:text-white transition-colors"
                   >
                     <Download className="w-4 h-4" />
                     friendlyhub.flatpakrepo
                   </a>
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </div>

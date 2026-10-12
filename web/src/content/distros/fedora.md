@@ -2,13 +2,28 @@
 
 Fedora supports Flatpak by default on various editions of Fedora. 
 
-## 1. Add the FriendlyHub repository
+## 1. Add the FriendlyHub and Flathub repositories
 
-Download the FriendlyHub repository file, then double-click to install it. This should work by default on both GNOME and KDE. If it doesn't, or if you're using a different desktop, open a terminal and run:
+FriendlyHub apps are built on runtimes (shared libraries) that are hosted on [Flathub](https://flathub.org), so you need both repositories. The quickest way to add them is our [setup script](/setup.sh), which adds whichever are missing and tells you what it changed. Open a terminal and run:
 
 ```bash
+curl -fsSL https://friendlyhub.org/setup.sh | sh
+```
+
+No curl? This does the same with wget:
+
+```bash
+wget -qO- https://friendlyhub.org/setup.sh | sh
+```
+
+If you'd rather not run a script, download the [Flathub repository file](https://dl.flathub.org/repo/flathub.flatpakrepo) and the [FriendlyHub repository file](https://dl.friendlyhub.org/repo/friendlyhub.flatpakrepo), then double-click each to install it. This should work by default on both GNOME and KDE. If it doesn't, or if you're using a different desktop, run:
+
+```bash
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 flatpak remote-add --if-not-exists friendlyhub https://dl.friendlyhub.org/repo/friendlyhub.flatpakrepo
 ```
+
+If you enabled third-party repositories when setting up Fedora, you already have Flathub and only need the FriendlyHub file.
 
 ## 2. Install apps
 

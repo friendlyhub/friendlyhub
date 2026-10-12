@@ -83,9 +83,13 @@ export default function InstallApp() {
           <div>
             <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-2">2. Manual Install</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-              You can install {displayName} via the command line:
+              You can install {displayName} via the command line. Its runtime comes from Flathub,
+              so you need both repositories:
             </p>
             <div className="space-y-2">
+              <code className="block bg-gray-900 text-emerald-400 rounded-lg p-3 text-sm font-mono">
+                flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+              </code>
               <code className="block bg-gray-900 text-emerald-400 rounded-lg p-3 text-sm font-mono">
                 flatpak remote-add --if-not-exists {REPO_NAME} {FLATPAKREPO_URL}
               </code>

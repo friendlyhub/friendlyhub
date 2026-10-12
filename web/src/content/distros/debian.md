@@ -26,25 +26,32 @@ If you use Discover and want to install Flatpak apps from there:
 sudo apt install plasma-discover-backend-flatpak
 ```
 
-## 4. Add the FriendlyHub repository
+## 4. Add the FriendlyHub and Flathub repositories
+
+FriendlyHub apps are built on runtimes (shared libraries) that are hosted on [Flathub](https://flathub.org), so you need both repositories. The quickest way to add them is our [setup script](/setup.sh), which adds whichever are missing and tells you what it changed:
 
 ```bash
-flatpak remote-add --if-not-exists friendlyhub https://dl.friendlyhub.org/repo/friendlyhub.flatpakrepo
+curl -fsSL https://friendlyhub.org/setup.sh | sh
 ```
 
-## 5. Add the FlatHub repository (optional)
+No curl? This does the same with wget:
 
-The majority of Linux apps are distributed on [Flathub](https://flathub.org). You'll probably want to add their repository too!
+```bash
+wget -qO- https://friendlyhub.org/setup.sh | sh
+```
+
+If you'd rather not run a script, add them yourself. If you already have Flathub, its command does nothing.
 
 ```bash
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+flatpak remote-add --if-not-exists friendlyhub https://dl.friendlyhub.org/repo/friendlyhub.flatpakrepo
 ```
 
-## 6. Restart your system
+## 5. Restart your system
 
 For the best experience, restart your system to ensure Flatpak and the new repository are fully set up.
 
-## 7. Install apps
+## 6. Install apps
 
 You can now browse and install apps from FriendlyHub:
 
