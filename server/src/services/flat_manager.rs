@@ -96,7 +96,8 @@ impl FlatManagerClient {
     }
 
     /// Purge an app's OSTree refs from the repo (called on app delete).
-    /// Hits the purge-server sidecar on port 8081.
+    /// Hits the purge-server sidecar on port 8081, which only queues the
+    /// purge; it finishes minutes later, and failures appear only in its logs.
     pub async fn purge_app(&self, app_id: &str) -> Result<(), AppError> {
         let base_url = self.base_url().await?;
         // Replace port 8080 with 8081 for the purge server
@@ -122,7 +123,8 @@ impl FlatManagerClient {
     }
 
     /// Regenerate the OSTree repo summary file (with GPG signature).
-    /// Hits the purge-server sidecar on port 8081.
+    /// Hits the purge-server sidecar on port 8081, which only queues the
+    /// regeneration; it finishes minutes later.
     pub async fn update_summary(&self) -> Result<(), AppError> {
         let base_url = self.base_url().await?;
         let purge_url = base_url.replace(":8080", ":8081");

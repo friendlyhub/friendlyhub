@@ -7,10 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Components are versioned independently: **server**, **web**, **builder-image**, **infra**.
 
+## [infra-0.1.6] - 2026-10-12
+
+### Fixed
+- Deleting an app from the website reported a failure even though the deletion went through. `delete_app` removes the app's records and GitHub repo, then calls the purge-server's `/purge`, which held the connection open while it deleted refs and regenerated the repo summary. Regenerating rebuilds every static delta and takes around 20 minutes on the 0.5 vCPU task, so the API's Lambda hit its 29-second limit every time, while the purge carried on to completion behind it. `/purge` and `/update-summary` now validate the request, queue the job and reply `202` straight away. A single worker thread runs queued jobs in order, so two regenerations never overlap on the same repo, which the old single-threaded server guaranteed only by refusing to answer anything else meanwhile. A job's outcome, including any failure, now appears only in the flat-manager log group under the `[purge-server]` prefix. The queue lives in memory, so a job still waiting when the task restarts is lost, as an in-flight request was before.
+
+## [server-0.1.8] - 2026-10-12
+
+### Changed
+- `POST /internal/update-summary` now returns `{"summary_update_queued": true}` instead of `{"summary_updated": true}`, since the purge-server queues the regeneration and replies before it runs.
+
 ## [infra-0.1.5] - 2026-10-12
 
 ### Fixed
 - Deleting an app left its debug and translation refs in the published repo. The purge-server sidecar removed only `app/<app-id>/*`, but flatpak-builder publishes an app's debug info and translations as separate refs, `runtime/<app-id>.Debug/*` and `runtime/<app-id>.Locale/*`, so these stayed in the repo summary after the app itself was gone. `/purge` now deletes both extensions along with the app. It matches the exact `.Debug/` and `.Locale/` prefixes rather than everything under `runtime/<app-id>.`, so an app whose ID extends another's (such as `com.example.App.Tool`) is never caught by the other app's purge.
+
+### Changed
+- Removed the two refs earlier deletions had left behind, `runtime/com.keithvassallo.clustercut.Debug` (from ClusterCut's previous app ID) and `runtime/org.friendlyhub.DummyApp.Debug`, by calling the fixed `/purge` for each ID. Each purge took roughly 20 minutes on the 0.5 vCPU task, almost all of it `update_summary` deleting and regenerating every static delta.
 
 ## [builder-image-0.3.0] - 2026-10-01
 

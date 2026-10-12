@@ -9,13 +9,22 @@ Endpoints:
     Deletes all OSTree refs matching app/{app_id}/* and the app's
     runtime/{app_id}.Debug/* and runtime/{app_id}.Locale/* extensions, then
     regenerates the repo summary file.
+  POST /update-summary
+    Regenerates the repo summary file.
+
+Both reply 202 as soon as the job is queued. Regenerating the summary takes
+many minutes, far longer than the API's Lambda can wait, so a single worker
+thread runs the jobs in order; two regenerations must never overlap on the
+same repo. Job results and failures are only logged.
 """
 
 import http.server
 import json
 import os
+import queue
 import subprocess
 import sys
+import threading
 
 DATA_DIR = os.environ.get("DATA_DIR", "/var/data/flatmanager")
 REPO_PATH = os.path.join(DATA_DIR, "repo")
@@ -180,6 +189,25 @@ def extract_appstream():
             break  # Only need one successful branch per arch
 
 
+jobs = queue.Queue()
+
+
+def run_jobs():
+    while True:
+        kind, app_id = jobs.get()
+        try:
+            if kind == "purge":
+                deleted = delete_refs(app_id)
+                print(f"[purge-server] Deleted refs for {app_id}: {deleted}", file=sys.stderr)
+                if deleted:
+                    update_summary()
+            else:
+                update_summary()
+            print(f"[purge-server] Finished {kind} job", file=sys.stderr)
+        except Exception as e:
+            print(f"[purge-server] {kind} job failed: {e}", file=sys.stderr)
+
+
 class PurgeHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path not in ("/purge", "/update-summary"):
@@ -193,17 +221,11 @@ class PurgeHandler(http.server.BaseHTTPRequestHandler):
             return
 
         if self.path == "/update-summary":
-            try:
-                update_summary()
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({"summary_updated": True}).encode())
-            except Exception as e:
-                self.send_response(500)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": str(e)}).encode())
+            jobs.put(("update-summary", None))
+            self.send_response(202)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"queued": "update-summary"}).encode())
             return
 
         # Read body
@@ -225,26 +247,18 @@ class PurgeHandler(http.server.BaseHTTPRequestHandler):
             self.send_error(400, "Invalid app_id")
             return
 
-        try:
-            deleted = delete_refs(app_id)
-            if deleted:
-                update_summary()
-            response = {"deleted_refs": deleted, "summary_updated": len(deleted) > 0}
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
-        except Exception as e:
-            self.send_response(500)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps({"error": str(e)}).encode())
+        jobs.put(("purge", app_id))
+        self.send_response(202)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({"queued": "purge", "app_id": app_id}).encode())
 
     def log_message(self, fmt, *args):
         print(f"[purge-server] {fmt % args}", file=sys.stderr)
 
 
 if __name__ == "__main__":
+    threading.Thread(target=run_jobs, daemon=True).start()
     server = http.server.HTTPServer(("0.0.0.0", 8081), PurgeHandler)
     print("[purge-server] Listening on port 8081", file=sys.stderr)
     server.serve_forever()

@@ -82,10 +82,10 @@ async fn refresh_appstream(State(state): State<AppState>) -> Result<Json<Value>,
     })))
 }
 
-/// Regenerate the OSTree repo summary file (with GPG signature).
+/// Queue a regeneration of the OSTree repo summary file (with GPG signature).
 async fn update_summary(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
     state.flat_manager.update_summary().await?;
-    Ok(Json(json!({ "summary_updated": true })))
+    Ok(Json(json!({ "summary_update_queued": true })))
 }
 
 /// Process CloudFront access logs to count app installs.
