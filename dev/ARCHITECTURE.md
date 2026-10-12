@@ -180,7 +180,7 @@ Serverless Framework V4, single stack per stage. Region: eu-west-1.
 | `builder-image.yml` | Push to `builder-image/` | Matrix build (x86_64 + aarch64), push to GHCR, tag x86_64 as latest |
 | `flat-manager-image.yml` | Push to `deploy/flat-manager/` | Build + push flat-manager wrapper image to GHCR |
 
-Server deploys via `just deploy-prod` (cargo-lambda build + serverless deploy). Frontend deploys via `aws s3 sync` to the SPA bucket.
+Server deploys via `just deploy-prod` (cargo-lambda build + serverless deploy, then `just sync-submissions` pushes `submissions-repo/` to `friendlyhub/submissions` if it has drifted). Frontend deploys via `aws s3 sync` to the SPA bucket.
 
 ## Submission State Machine
 

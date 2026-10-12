@@ -18,9 +18,35 @@ build-lambda:
 deploy-dev: build-lambda
     cd infra && serverless deploy --stage dev
 
-# Build and deploy to prod
-deploy-prod: build-lambda
+# Build and deploy to prod, then sync the submissions repo
+deploy-prod: build-lambda && sync-submissions
     cd infra && serverless deploy --stage prod
+
+# Push submissions-repo/ to friendlyhub/submissions if it has drifted
+sync-submissions:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "$(git status --porcelain submissions-repo)" ]; then
+        echo "submissions-repo/ has uncommitted changes; commit them first" >&2
+        exit 1
+    fi
+    sha=$(git log -1 --format=%h -- submissions-repo)
+    subject=$(git log -1 --format=%s -- submissions-repo)
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    gh repo clone friendlyhub/submissions "$tmp" -- -q --depth=1
+    # Overlay only: the live repo also holds per-app directories from open PRs.
+    cp -r submissions-repo/. "$tmp"/
+    cd "$tmp"
+    if [ -z "$(git status --porcelain)" ]; then
+        echo "friendlyhub/submissions is up to date"
+        exit 0
+    fi
+    git status --short
+    git add -A
+    git commit -q -m "$subject" -m "Synced from submissions-repo/ in friendlyhub/friendlyhub ($sha)."
+    git push -q origin main
+    echo "friendlyhub/submissions synced to $sha"
 
 # Build and deploy the frontend SPA + docs to S3 (prod)
 deploy-web:
