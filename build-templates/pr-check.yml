@@ -28,7 +28,7 @@ jobs:
         id: detect
         run: |
           for f in *.json *.yaml *.yml; do
-            if [ -f "$f" ] && grep -qE '"app-id"|"id"|app-id:' "$f" 2>/dev/null; then
+            if [ -f "$f" ] && grep -qE '"app-id"|"id"|app-id:|^id:' "$f" 2>/dev/null; then
               echo "manifest=$f" >> "$GITHUB_OUTPUT"
               echo "Found manifest: $f"
               break
@@ -121,7 +121,7 @@ jobs:
         run: |
           # Find the manifest file
           for f in *.json *.yaml *.yml; do
-            if [ -f "$f" ] && grep -qE '"app-id"|"id"|app-id:' "$f" 2>/dev/null; then
+            if [ -f "$f" ] && grep -qE '"app-id"|"id"|app-id:|^id:' "$f" 2>/dev/null; then
               MANIFEST="$f"
               break
             fi

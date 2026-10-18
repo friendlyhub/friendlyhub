@@ -75,7 +75,7 @@ jobs:
           if [ -z "${MANIFEST}" ]; then
             # Look for common manifest filenames
             for f in *.json *.yaml *.yml; do
-              if [ -f "$f" ] && grep -q '"app-id"\|"id"\|app-id:' "$f" 2>/dev/null; then
+              if [ -f "$f" ] && grep -q '"app-id"\|"id"\|app-id:\|^id:' "$f" 2>/dev/null; then
                 MANIFEST="$f"
                 break
               fi

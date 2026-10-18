@@ -17,7 +17,7 @@ You need two files (and optionally more):
 A standard Flatpak manifest in JSON or YAML. The key requirement is that your source must use `type: git` pointing to your upstream repository -- not `type: dir`.
 
 ```yaml
-app-id: org.example.MyApp
+id: org.example.MyApp
 runtime: org.gnome.Platform
 runtime-version: '51'
 sdk: org.gnome.Sdk

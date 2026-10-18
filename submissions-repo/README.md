@@ -29,7 +29,7 @@ If your build needs additional source files (e.g. `cargo-sources.json` for Rust 
 
 Your manifest (`.json`, `.yaml`, or `.yml`) must:
 
-- Have an `app-id` field matching your directory name
+- Have an `id` field (or the older `app-id`) matching your directory name
 - Specify a `runtime`, `sdk`, and `command`
 - Reference your app's source code using `type: git` with a URL pointing to your upstream repository (not `type: dir`)
 - Reference any companion source files by filename (e.g. `"cargo-sources.json"`)

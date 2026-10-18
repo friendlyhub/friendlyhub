@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Components are versioned independently: **server**, **web**, **builder-image**, **infra**.
 
+## [server-0.1.9] - 2026-10-18
+
+### Fixed
+- Manifest detection missed YAML manifests that use `id:` rather than the deprecated `app-id:`. The `grep` in the submissions repo's PR check and merge step, and in each app repo's `build.yml` and `pr-check.yml`, matched `"id"` and `app-id:` but not `id:`, so a PR carrying Backtrack's YAML manifest would have stopped at "No manifest found". The pattern now also matches `^id:`. App repos pick up the fix on their next submission, when the API pushes the workflows again. The submissions README and the PR guide now show `id`.
+
 ## [infra-0.1.6] - 2026-10-12
 
 ### Fixed

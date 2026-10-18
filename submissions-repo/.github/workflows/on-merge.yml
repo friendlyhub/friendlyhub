@@ -40,7 +40,7 @@ jobs:
           # Find manifest
           MANIFEST=""
           for f in "${APP_DIR}"/*.json "${APP_DIR}"/*.yaml "${APP_DIR}"/*.yml; do
-            if [ -f "$f" ] && grep -qE '"app-id"|"id"|app-id:' "$f" 2>/dev/null; then
+            if [ -f "$f" ] && grep -qE '"app-id"|"id"|app-id:|^id:' "$f" 2>/dev/null; then
               MANIFEST="$f"
               break
             fi

@@ -93,7 +93,7 @@ jobs:
             for name in $(echo "${ENTRIES}" | grep -E "\.${ext}$" | sort); do
               gh api "repos/${REPO}/contents/${APP_DIR}/${name}?ref=${HEAD_SHA}" \
                 -H "Accept: application/vnd.github.raw" > work/candidate || continue
-              if grep -qE '"app-id"|"id"|app-id:' work/candidate; then
+              if grep -qE '"app-id"|"id"|app-id:|^id:' work/candidate; then
                 MANIFEST="${name}"
                 MANIFEST_EXT="${ext}"
                 mv work/candidate "work/manifest.${ext}"
