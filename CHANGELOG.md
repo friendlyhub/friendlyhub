@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Components are versioned independently: **server**, **web**, **builder-image**, **infra**.
 
+## [web-0.1.5] - 2026-10-18
+
+### Fixed
+- The home page's app carousel showed a near-white banner in dark mode for any app whose metainfo has no `<branding>` colours, such as SmartDND. The fallback for a missing brand colour was a fixed `#f3f4f6` (gray-100), whatever the site theme. It now follows the theme: gray-100 in light mode and gray-800 (`#1e2939`) in dark mode, the same shade the page already uses for chips and buttons there. The heading, summary and link text pick their colours from the background, so they switch to light text on the dark fallback without further changes.
+- Screenshots on the app page sat flush against the edges of the carousel when the image was cropped tight to the window, as SmartDND's are. The carousel added no padding of its own, so the only margin a screenshot got was whatever transparent border and shadow its PNG happened to include, which made apps look inconsistent next to each other. The carousel now pads every screenshot, so a tightly cropped image gets the same space around it as one taken with a window shadow.
+
 ## [server-0.1.10] - 2026-10-18
 
 ### Fixed

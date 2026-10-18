@@ -279,7 +279,8 @@ export default function Home() {
       {/* App Carousel */}
       {featuredApps.length > 0 && (() => {
         const app = featuredApps[appSlide];
-        const bgColor = (themeResolved === 'dark' ? app.branding?.dark_color : app.branding?.light_color) ?? '#f3f4f6';
+        const fallbackColor = themeResolved === 'dark' ? '#1e2939' : '#f3f4f6';
+        const bgColor = (themeResolved === 'dark' ? app.branding?.dark_color : app.branding?.light_color) ?? fallbackColor;
         const defaultScreenshot = app.screenshots.find((s) => s.is_default) ?? app.screenshots[0];
         const isDark = isColorDark(bgColor);
         return (

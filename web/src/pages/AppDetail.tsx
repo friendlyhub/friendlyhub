@@ -54,7 +54,7 @@ function ScreenshotCarousel({ screenshots }: { screenshots: Screenshot[] }) {
                 key={s.url}
                 src={s.url}
                 alt={s.caption || 'Screenshot'}
-                className="w-full shrink-0 h-auto max-h-125 object-contain cursor-pointer"
+                className="w-full shrink-0 h-auto max-h-125 object-contain p-4 sm:p-6 cursor-pointer"
                 onClick={() => setLightbox(true)}
               />
             ))}
