@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Components are versioned independently: **server**, **web**, **builder-image**, **infra**.
 
+## [server-0.1.10] - 2026-10-18
+
+### Fixed
+- The submissions repo's merge workflow failed on every push to `main` that touched no app directory, including each sync from `submissions-repo/` that `deploy-prod` makes. The step that finds the changed app directory ends its pipeline with `grep -v '^\.'`, which returns 1 when nothing is left, and under `bash -e` that failure in the `CHANGED_DIRS=$(...)` assignment ended the step before its "No app directories changed, skipping" branch could run. The failure was harmless, since no submission was due, but it sent a failure email each time. It had been happening since the workflow was written, on README and workflow-only pushes. The pipeline now tolerates an empty result.
+
 ## [server-0.1.9] - 2026-10-18
 
 ### Fixed

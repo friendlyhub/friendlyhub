@@ -24,8 +24,9 @@ jobs:
       - name: Detect changed app directory
         id: detect
         run: |
-          # Find directories changed in the merge commit
-          CHANGED_DIRS=$(git diff --name-only HEAD~1...HEAD | grep '/' | cut -d'/' -f1 | sort -u | grep -v '^\.')
+          # Find directories changed in the merge commit. A push that touches no
+          # app directory leaves grep with no match, which must not fail the step.
+          CHANGED_DIRS=$(git diff --name-only HEAD~1...HEAD | grep '/' | cut -d'/' -f1 | sort -u | grep -v '^\.' || true)
           DIR_COUNT=$(echo "${CHANGED_DIRS}" | grep -c . || true)
 
           if [ "${DIR_COUNT}" -eq 0 ]; then
