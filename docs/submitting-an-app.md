@@ -55,7 +55,7 @@ The manifest must include the standard Flatpak manifest fields (`id`, `runtime`,
 > [!TIP]
 > The form and editor views update each other. This means that, for example, you can start using the editor and, as you make changes, the form will auto-update. You can then switch to the form, make changes there, and see your changes updated in the manifest. 
 
-If your build requires additional source files (patches, data files, etc.), you can upload them as part of the submission.
+If your manifest needs files beside it, the form lists each one and asks you to upload it before you can submit. That covers included module and sources files (such as `python3-requirements.json` or `cargo-sources.json`), patches, and local files in `file` or `archive` sources. For a file the manifest names with a directory, such as `patches/fix.patch`, upload `fix.patch` and FriendlyHub puts it in `patches/`.
 
 ![Submitting additional source files](/images/developer_submit_sourcefiles.png)
 

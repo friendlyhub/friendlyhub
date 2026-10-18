@@ -230,12 +230,22 @@ impl GitHubService {
         content: &str,
         message: &str,
     ) -> Result<(), AppError> {
+        self.put_file_base64(repo, path, &base64_encode(content.as_bytes()), message)
+            .await
+    }
+
+    /// Like `put_file`, for content that is already base64-encoded.
+    pub async fn put_file_base64(
+        &self,
+        repo: &str,
+        path: &str,
+        encoded: &str,
+        message: &str,
+    ) -> Result<(), AppError> {
         let url = format!(
             "https://api.github.com/repos/{}/{repo}/contents/{path}",
             self.org
         );
-
-        let encoded = base64_encode(content.as_bytes());
 
         let mut attempts = 0;
         loop {
@@ -417,49 +427,59 @@ impl GitHubService {
         Ok(())
     }
 
-    /// List files in the root of a repo, returning name + download_url for each.
+    /// List the files in a repo, returning path + download_url for each. Descends
+    /// into directories, except dot-directories such as .github.
     pub async fn list_repo_files(&self, repo: &str) -> Result<Vec<RepoFile>, AppError> {
         let token = self.get_token().await?;
-        let url = format!(
-            "https://api.github.com/repos/{}/{repo}/contents/",
-            self.org
-        );
+        let mut files = Vec::new();
+        let mut dirs = std::collections::VecDeque::from([String::new()]);
 
-        let resp = self
-            .client
-            .get(&url)
-            .header("User-Agent", "friendlyhub-api")
-            .header("Accept", "application/vnd.github+json")
-            .bearer_auth(&token)
-            .send()
-            .await
-            .map_err(|e| AppError::Internal(format!("GitHub API call failed: {e}")))?;
+        while let Some(dir) = dirs.pop_front() {
+            let url = format!(
+                "https://api.github.com/repos/{}/{repo}/contents/{dir}",
+                self.org
+            );
 
-        if resp.status() == reqwest::StatusCode::NOT_FOUND {
-            return Ok(vec![]);
+            let resp = self
+                .client
+                .get(&url)
+                .header("User-Agent", "friendlyhub-api")
+                .header("Accept", "application/vnd.github+json")
+                .bearer_auth(&token)
+                .send()
+                .await
+                .map_err(|e| AppError::Internal(format!("GitHub API call failed: {e}")))?;
+
+            if resp.status() == reqwest::StatusCode::NOT_FOUND {
+                return Ok(vec![]);
+            }
+
+            if !resp.status().is_success() {
+                let status = resp.status();
+                let body = resp.text().await.unwrap_or_default();
+                return Err(AppError::Internal(format!(
+                    "GitHub list contents returned {status}: {body}"
+                )));
+            }
+
+            let items: Vec<GitHubContentItem> = resp
+                .json()
+                .await
+                .map_err(|e| AppError::Internal(format!("Failed to parse GitHub response: {e}")))?;
+
+            for item in items {
+                match item.item_type.as_str() {
+                    "file" => files.push(RepoFile {
+                        name: item.path,
+                        download_url: item.download_url.unwrap_or_default(),
+                    }),
+                    "dir" if !item.name.starts_with('.') => dirs.push_back(item.path),
+                    _ => {}
+                }
+            }
         }
 
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            return Err(AppError::Internal(format!(
-                "GitHub list contents returned {status}: {body}"
-            )));
-        }
-
-        let items: Vec<GitHubContentItem> = resp
-            .json()
-            .await
-            .map_err(|e| AppError::Internal(format!("Failed to parse GitHub response: {e}")))?;
-
-        Ok(items
-            .into_iter()
-            .filter(|item| item.item_type == "file")
-            .map(|item| RepoFile {
-                name: item.name,
-                download_url: item.download_url.unwrap_or_default(),
-            })
-            .collect())
+        Ok(files)
     }
 
     /// Get workflow run jobs (for build progress proxying).
@@ -656,6 +676,7 @@ impl GitHubService {
 #[derive(Debug, Deserialize)]
 struct GitHubContentItem {
     name: String,
+    path: String,
     #[serde(rename = "type")]
     item_type: String,
     download_url: Option<String>,

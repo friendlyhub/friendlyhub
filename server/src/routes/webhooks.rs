@@ -14,7 +14,7 @@ use crate::models::{app::{self, CreateApp}, submission, user, verified_domain};
 use crate::router::AppState;
 use crate::services::{checks, manifest, metainfo, notifications, verification};
 
-use super::submissions::ensure_repo_and_build;
+use super::submissions::{check_source_file_paths, ensure_repo_and_build, SourceFile};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -262,12 +262,7 @@ async fn webhook_submit(
 
     // Resolve arches from friendlyhub.json in the app repo (best-effort)
     let arches = match state.github.get_file_content(&payload.app_id, "friendlyhub.json").await {
-        Ok(content) => {
-            let source_files = std::collections::HashMap::from([
-                ("friendlyhub.json".to_string(), content),
-            ]);
-            super::submissions::resolve_arches(&[], &source_files)
-        }
+        Ok(content) => super::submissions::resolve_arches(&[], Some(&content)),
         Err(_) => vec!["x86_64".into(), "aarch64".into()],
     };
 
@@ -314,7 +309,7 @@ struct PrSubmitPayload {
     metainfo: String,
     github_username: String,
     #[serde(default)]
-    source_files: HashMap<String, String>,
+    source_files: HashMap<String, SourceFile>,
 }
 
 /// Create an app + submission from a PR merge in the submissions repo.
@@ -360,6 +355,8 @@ async fn pr_submit(
             )));
         }
     }
+
+    check_source_file_paths(&payload.app_id, &payload.source_files)?;
 
     // Resolve GitHub username to a user record
     let gh_user = state.github.get_user_by_login(&payload.github_username).await?;
@@ -452,7 +449,8 @@ async fn pr_submit(
     .await?;
 
     // Resolve arches from friendlyhub.json in source_files
-    let arches = super::submissions::resolve_arches(&[], &payload.source_files);
+    let friendlyhub_json = payload.source_files.get("friendlyhub.json").and_then(SourceFile::text);
+    let arches = super::submissions::resolve_arches(&[], friendlyhub_json);
 
     // Create repo, push files, add collaborator, trigger build
     if let Err(e) = ensure_repo_and_build(

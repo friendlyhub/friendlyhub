@@ -1,5 +1,7 @@
 // AppStream metainfo helpers for the dual-pane editor
 
+import { getManifestAppId, type Manifest } from './manifest';
+
 export interface DescriptionBlock {
   type: 'p' | 'ul' | 'ol';
   content: string; // for p: paragraph text; for ul/ol: newline-separated list items
@@ -498,21 +500,63 @@ export function parseMetainfo(xml: string): MetainfoData | null {
   }
 }
 
-// Extract external source file names from a manifest
-export function getExternalSourceFiles(manifest: Record<string, unknown>): string[] {
-  const files: string[] = [];
-  const modules = manifest.modules as Array<unknown> | undefined;
-  if (!Array.isArray(modules)) return files;
-
-  for (const mod of modules) {
-    if (typeof mod !== 'object' || mod === null) continue;
-    const sources = (mod as Record<string, unknown>).sources as Array<unknown> | undefined;
-    if (!Array.isArray(sources)) continue;
-    for (const src of sources) {
-      if (typeof src === 'string' && !src.startsWith('/') && !src.startsWith('http')) {
-        files.push(src);
-      }
-    }
+function joinPath(dir: string, path: string): string {
+  const parts: string[] = [];
+  for (const part of `${dir}/${path}`.split('/')) {
+    if (part === '' || part === '.') continue;
+    if (part === '..' && parts.length > 0 && parts[parts.length - 1] !== '..') parts.pop();
+    else parts.push(part);
   }
-  return files;
+  return parts.join('/');
+}
+
+// Extract the files a manifest needs beside it: included module and sources
+// files (string entries in modules or sources), and the local files of file,
+// patch and archive sources, at any depth. `loaded` holds the parsed files
+// uploaded so far, by path: an included module file can need further files.
+export function getExternalSourceFiles(
+  manifest: Record<string, unknown>,
+  loaded: Record<string, unknown> = {},
+): string[] {
+  const files = new Set<string>();
+  // The server writes the metainfo beside the manifest itself
+  const metainfo = `${getManifestAppId(manifest as Manifest)}.metainfo.xml`;
+
+  // As in flatpak-builder, a path is relative to the file that names it
+  const add = (dir: string, path: unknown): string | null => {
+    if (typeof path !== 'string' || path.startsWith('/') || path.includes('://')) return null;
+    const resolved = joinPath(dir, path);
+    // The build workflow clones flathub/shared-modules itself when the manifest mentions it
+    if (resolved.startsWith('shared-modules/') || resolved === metainfo || files.has(resolved)) return null;
+    files.add(resolved);
+    return resolved;
+  };
+
+  const collect = (modules: unknown, dir: string) => {
+    if (!Array.isArray(modules)) return;
+    for (const mod of modules) {
+      if (typeof mod === 'string') {
+        const file = add(dir, mod);
+        if (file) collect([loaded[file]], file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : '');
+        continue;
+      }
+      if (typeof mod !== 'object' || mod === null) continue;
+      const { sources, modules: children } = mod as Record<string, unknown>;
+      if (Array.isArray(sources)) {
+        for (const src of sources) {
+          if (typeof src === 'string') {
+            add(dir, src);
+          } else if (typeof src === 'object' && src !== null) {
+            const { type, path, paths } = src as Record<string, unknown>;
+            if (type === 'file' || type === 'patch' || type === 'archive') add(dir, path);
+            if (type === 'patch' && Array.isArray(paths)) paths.forEach((p) => add(dir, p));
+          }
+        }
+      }
+      collect(children, dir);
+    }
+  };
+
+  collect(manifest.modules, '');
+  return [...files];
 }

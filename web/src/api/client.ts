@@ -97,12 +97,16 @@ export const unpublishApp = (appId: string) =>
   request<{ status: string }>(`/apps/${appId}/unpublish`, { method: 'POST' });
 
 // Submissions
+
+// Text travels as is; anything that isn't valid UTF-8 (icons, archives) travels base64-encoded
+export type SourceFileContent = string | { base64: string };
+
 export const submitApp = (
   appId: string,
   version: string,
   manifest: unknown,
   metainfo: string,
-  sourceFiles?: Record<string, string>,
+  sourceFiles?: Record<string, SourceFileContent>,
   targetArches?: string[],
 ) =>
   request<{ id: string; status: string; version: string; warnings: string[] }>(

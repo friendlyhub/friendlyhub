@@ -20,8 +20,14 @@ export default function SourceFileTabs({ files, onQuote }: Props) {
 
     setLoading((prev) => ({ ...prev, [activeTab]: true }));
     fetch(file.download_url)
-      .then((res) => res.text())
-      .then((text) => {
+      .then((res) => res.arrayBuffer())
+      .then((buf) => {
+        let text: string;
+        try {
+          text = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+        } catch {
+          text = `// Binary file (${buf.byteLength} bytes), not shown`;
+        }
         setContents((prev) => ({ ...prev, [activeTab]: text }));
         setLoading((prev) => ({ ...prev, [activeTab]: false }));
       })

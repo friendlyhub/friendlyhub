@@ -10,7 +10,28 @@ Components are versioned independently: **server**, **web**, **builder-image**, 
 ## [server-0.1.9] - 2026-10-18
 
 ### Fixed
+- Companion files in subdirectories landed in the wrong place. The API wrote every companion file at the root of the app's build repo under its bare filename, so a manifest naming `patches/fix.patch` got a repo with `fix.patch` at the top and flatpak-builder could not find it. Files are now written at their path relative to the manifest. Because that path now decides where a file lands, `submit` and `pr-submit` check every path before creating anything. Each part must be non-empty, must not start with a dot, and may only use letters, digits, `.`, `_`, `+` and `-`. The dot rule rules out `..` and keeps uploads away from `.github/`, where the workflows holding the build secrets live. Paths under `shared-modules/` are refused, since the build clones flathub/shared-modules there itself.
+- A companion file named `<app-id>.json` or `<app-id>.metainfo.xml` silently replaced the manifest or metainfo the API had validated, because companion files were written after them. A build could therefore run from a manifest other than the one reviewers saw. Both names are now refused.
 - Manifest detection missed YAML manifests that use `id:` rather than the deprecated `app-id:`. The `grep` in the submissions repo's PR check and merge step, and in each app repo's `build.yml` and `pr-check.yml`, matched `"id"` and `app-id:` but not `id:`, so a PR carrying Backtrack's YAML manifest would have stopped at "No manifest found". The pattern now also matches `^id:`. App repos pick up the fix on their next submission, when the API pushes the workflows again. The submissions README and the PR guide now show `id`.
+- The submissions repo's merge step sent only the `*.json` files at the top of the app directory, so YAML includes, patches, other local files and anything in a subdirectory never reached the build repo. It now sends every file in the app directory except the manifest, the metainfo, hidden files and `shared-modules/`, keyed by path relative to the directory.
+- The same step failed for any companion file over 128 KB, which Backtrack's 147 KB `cargo-sources.json` would have hit. Each file's contents went to `jq` as a command-line argument, and Linux caps a single argument at 128 KB. Contents now pass through files.
+- The source file lists on the submission and review pages showed only files at the root of the app's repo. They now include subdirectories, though not dot-directories such as `.github`.
+- `build.yml` looked for `shared-modules/` references in root files only, so an included module file in a subdirectory that used a shared module got no clone. The check now searches the whole checkout, skipping `.git` and `.github`, since the workflow itself names `shared-modules/`.
+
+### Added
+- Binary companion files. A `source_files` value may now be `{"base64": "..."}`, which the API passes straight to GitHub. A plain string still means text, so existing clients and in-flight merge runs are unaffected. The merge step sends any file that is not valid UTF-8 this way, which covers icons and local archives.
+
+## [web-0.1.4] - 2026-10-18
+
+### Fixed
+- The submit form missed files a manifest includes as modules. `getExternalSourceFiles` collected only the string entries in each top-level module's `sources`, so a string in `modules` never got an upload slot. That is how flatpak-pip-generator output is always used, so every Python app was affected, and nested modules were skipped entirely. Backtrack's rc3 submission went through with `cargo-sources.json` but without `python3-requirements.json`, and both builds failed while loading the manifest. The form now collects strings in `modules` and `sources` at every depth, plus the local files of `file`, `patch` (`path` and `paths`) and `archive` sources, each resolved relative to the file that names it. Absolute paths, URLs, paths under `shared-modules/` and the app's own metainfo, which the API writes, are left out. URLs are now recognised by `://` rather than a leading `http`, which also skipped local files such as `http-parser.json`.
+- Files the manifest names with a directory could not be uploaded. The slot for `patches/fix.patch` accepted only a file called exactly that, which no browser ever reports. It now accepts `fix.patch` and submits it under the full path.
+- Uploads were always read as text, which corrupted binary files such as icons and archives. A file that is not valid UTF-8 is now sent base64-encoded.
+- The source file viewer on the submission and review pages rendered binary files as garbage. It now shows a one-line note with the file's size.
+
+### Added
+- Once an included module file is uploaded, the form reads it and asks for any files it needs in turn.
+- The submission guide now explains which files the form asks for, and how to upload one the manifest names with a directory.
 
 ## [infra-0.1.6] - 2026-10-12
 

@@ -32,7 +32,7 @@ Your manifest (`.json`, `.yaml`, or `.yml`) must:
 - Have an `id` field (or the older `app-id`) matching your directory name
 - Specify a `runtime`, `sdk`, and `command`
 - Reference your app's source code using `type: git` with a URL pointing to your upstream repository (not `type: dir`)
-- Reference any companion source files by filename (e.g. `"cargo-sources.json"`)
+- Reference companion files by their path relative to the manifest (e.g. `"cargo-sources.json"` or `patches/fix.patch`). Subdirectories work; hidden files and directories are not submitted.
 
 ### AppStream Metainfo
 

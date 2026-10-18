@@ -29,10 +29,10 @@ struct SubmitRequest {
     manifest: Value,
     /// AppStream metainfo XML (required).
     metainfo: String,
-    /// Optional companion source files (e.g. cargo-sources.json, node-sources.json).
-    /// Keys are filenames, values are file contents as strings.
+    /// Optional companion source files (e.g. cargo-sources.json, patches).
+    /// Keys are paths relative to the manifest.
     #[serde(default)]
-    source_files: HashMap<String, String>,
+    source_files: HashMap<String, SourceFile>,
     /// Target CPU architectures to build for.
     /// Empty = default to all supported arches.
     #[serde(default)]
@@ -47,12 +47,60 @@ struct FriendlyHubConfig {
     skip_arches: Option<Vec<String>>,
 }
 
-pub fn resolve_arches(target_arches: &[String], source_files: &HashMap<String, String>) -> Vec<String> {
+/// A companion file's contents: text as a plain string, anything that isn't
+/// valid UTF-8 (icons, archives) as `{"base64": "..."}`.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum SourceFile {
+    Text(String),
+    Base64 { base64: String },
+}
+
+impl SourceFile {
+    pub fn text(&self) -> Option<&str> {
+        match self {
+            SourceFile::Text(text) => Some(text),
+            SourceFile::Base64 { .. } => None,
+        }
+    }
+}
+
+/// Companion files are written at their own paths in the app's build repo, so
+/// each must be a plain path inside it. A dot-prefixed part would reach
+/// .github/, where the workflows holding the build secrets live.
+pub fn check_source_file_paths(app_id: &str, source_files: &HashMap<String, SourceFile>) -> Result<(), AppError> {
+    for path in source_files.keys() {
+        if *path == format!("{app_id}.json") || *path == format!("{app_id}.metainfo.xml") {
+            return Err(AppError::BadRequest(format!(
+                "Source file '{path}' would replace the manifest or metainfo that FriendlyHub writes"
+            )));
+        }
+        if path.starts_with("shared-modules/") {
+            return Err(AppError::BadRequest(format!(
+                "Source file '{path}' is under shared-modules/, which the build fetches itself"
+            )));
+        }
+        let plain = path.split('/').all(|part| {
+            !part.is_empty()
+                && !part.starts_with('.')
+                && part.chars().all(|c| c.is_ascii_alphanumeric() || "._+-".contains(c))
+        });
+        if !plain {
+            return Err(AppError::BadRequest(format!(
+                "Source file path '{path}' must stay inside the manifest's directory, with no hidden parts, \
+                 using only letters, digits, '.', '_', '+' and '-'"
+            )));
+        }
+    }
+    Ok(())
+}
+
+pub fn resolve_arches(target_arches: &[String], friendlyhub_json: Option<&str>) -> Vec<String> {
     if !target_arches.is_empty() {
         return target_arches.to_vec();
     }
 
-    if let Some(config) = source_files.get("friendlyhub.json") {
+    if let Some(config) = friendlyhub_json {
         if let Ok(parsed) = serde_json::from_str::<FriendlyHubConfig>(config) {
             if let Some(only) = parsed.only_arches {
                 return only;
@@ -121,6 +169,8 @@ async fn submit(
         }
     }
 
+    check_source_file_paths(&app.app_id, &input.source_files)?;
+
     // Update app metadata from metainfo immediately so the app detail page
     // shows the correct info even before the submission is reviewed.
     let finish_args: Vec<String> = input.manifest
@@ -144,7 +194,8 @@ async fn submit(
     .await?;
 
     // Push manifest to the app's GitHub repo and trigger a build
-    let arches = resolve_arches(&input.target_arches, &input.source_files);
+    let friendlyhub_json = input.source_files.get("friendlyhub.json").and_then(SourceFile::text);
+    let arches = resolve_arches(&input.target_arches, friendlyhub_json);
     ensure_repo_and_build(&state, &app.app_id, sub.id, app.owner_id, &input.manifest, &input.metainfo, &input.source_files, &arches).await?;
 
     Ok(Json(serde_json::json!({
@@ -274,6 +325,7 @@ async fn source_files(
 
 /// Create/update the app's GitHub repo, push files + workflows, add collaborator,
 /// and trigger a GHA build. Used by both web submissions and PR-based submissions.
+/// `source_files` must have passed `check_source_file_paths`.
 pub async fn ensure_repo_and_build(
     state: &AppState,
     app_id: &str,
@@ -281,7 +333,7 @@ pub async fn ensure_repo_and_build(
     owner_id: Uuid,
     manifest: &Value,
     metainfo: &str,
-    source_files: &HashMap<String, String>,
+    source_files: &HashMap<String, SourceFile>,
     arches: &[String],
 ) -> Result<(), AppError> {
     let repo = app_id;
@@ -341,20 +393,12 @@ pub async fn ensure_repo_and_build(
         )
         .await?;
 
-    for (filename, content) in source_files {
-        let safe_name = std::path::Path::new(filename)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .ok_or_else(|| AppError::BadRequest(format!("Invalid source file name: {filename}")))?;
-        state
-            .github
-            .put_file(
-                repo,
-                safe_name,
-                content,
-                &format!("[friendlyhub-api] Update {safe_name} for submission {submission_id}"),
-            )
-            .await?;
+    for (path, file) in source_files {
+        let message = format!("[friendlyhub-api] Update {path} for submission {submission_id}");
+        match file {
+            SourceFile::Text(content) => state.github.put_file(repo, path, content, &message).await?,
+            SourceFile::Base64 { base64 } => state.github.put_file_base64(repo, path, base64, &message).await?,
+        }
     }
 
     state
@@ -433,4 +477,65 @@ async fn validate_submission(
 
     let result = manifest::validate(&sub.manifest);
     Ok(Json(result))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn files(paths: &[&str]) -> HashMap<String, SourceFile> {
+        paths
+            .iter()
+            .map(|p| (p.to_string(), SourceFile::Text(String::new())))
+            .collect()
+    }
+
+    #[test]
+    fn accepts_plain_paths() {
+        let ok = files(&["cargo-sources.json", "deps/python3-requirements.json", "patches/0001-fix+build.patch"]);
+        assert!(check_source_file_paths("org.example.App", &ok).is_ok());
+    }
+
+    #[test]
+    fn rejects_paths_that_leave_or_hide() {
+        for path in [
+            ".github/workflows/evil.yml",
+            "deps/../.github/workflows/evil.yml",
+            "../outside.json",
+            "/abs/path.json",
+            "deps//file.json",
+            "deps/",
+            "my file.json",
+            "deps\\file.json",
+        ] {
+            assert!(check_source_file_paths("org.example.App", &files(&[path])).is_err(), "{path}");
+        }
+    }
+
+    #[test]
+    fn rejects_server_written_files_and_shared_modules() {
+        for path in [
+            "org.example.App.json",
+            "org.example.App.metainfo.xml",
+            "shared-modules/libsecret/libsecret.json",
+        ] {
+            assert!(check_source_file_paths("org.example.App", &files(&[path])).is_err(), "{path}");
+        }
+    }
+
+    #[test]
+    fn reads_base64_and_text_source_files() {
+        let parsed: HashMap<String, SourceFile> =
+            serde_json::from_str(r#"{"a.patch": "text", "icon.png": {"base64": "iVBORw0K"}}"#).unwrap();
+        assert_eq!(parsed["a.patch"].text(), Some("text"));
+        assert!(matches!(&parsed["icon.png"], SourceFile::Base64 { base64 } if base64 == "iVBORw0K"));
+    }
+
+    #[test]
+    fn resolves_arches_from_friendlyhub_json() {
+        assert_eq!(resolve_arches(&[], Some(r#"{"only-arches": ["x86_64"]}"#)), vec!["x86_64"]);
+        assert_eq!(resolve_arches(&[], Some(r#"{"skip-arches": ["x86_64"]}"#)), vec!["aarch64"]);
+        assert_eq!(resolve_arches(&[], None), vec!["x86_64", "aarch64"]);
+        assert_eq!(resolve_arches(&["aarch64".into()], Some(r#"{"only-arches": ["x86_64"]}"#)), vec!["aarch64"]);
+    }
 }

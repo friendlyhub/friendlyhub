@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { FileCode, FileText, FormInput, AlertTriangle, Upload } from 'lucide-react';
 import YAML from 'yaml';
-import { getApp, submitApp } from '../api/client';
+import { getApp, submitApp, type SourceFileContent } from '../api/client';
 import ManifestForm from '../components/ManifestForm';
 import ManifestEditor, { type EditorFormat } from '../components/ManifestEditor';
 import MetainfoForm from '../components/MetainfoForm';
@@ -76,6 +76,19 @@ function DragHandle({ cssVar }: { cssVar: string }) {
   );
 }
 
+async function readSourceFile(file: File): Promise<SourceFileContent> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    }
+    return { base64: btoa(binary) };
+  }
+}
+
 function SourceFileDropzone({
   filename,
   loaded,
@@ -84,20 +97,21 @@ function SourceFileDropzone({
 }: {
   filename: string;
   loaded: boolean;
-  onLoad: (content: string) => void;
+  onLoad: (content: SourceFileContent) => void;
   onRemove: () => void;
 }) {
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // The browser only gives the file's own name, not the directory the manifest expects it in
+  const expectedName = filename.split('/').pop() || filename;
+
   const handleFile = (file: File) => {
-    if (file.name !== filename) {
-      alert(`Filename must be "${filename}", got "${file.name}"`);
+    if (file.name !== expectedName) {
+      alert(`Filename must be "${expectedName}", got "${file.name}"`);
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => onLoad(reader.result as string);
-    reader.readAsText(file);
+    readSourceFile(file).then(onLoad);
   };
 
   if (loaded) {
@@ -170,7 +184,7 @@ export default function SubmitVersion() {
   const metainfoDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // === Submission fields ===
-  const [sourceFiles, setSourceFiles] = useState<Record<string, string>>({});
+  const [sourceFiles, setSourceFiles] = useState<Record<string, SourceFileContent>>({});
   const [targetArches, setTargetArches] = useState<string>('both');
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -271,7 +285,15 @@ export default function SubmitVersion() {
   const metainfoIdMismatch = metainfo.id.trim() !== '' && metainfo.id !== appId;
 
   // === External source files from manifest ===
-  const externalSourceFiles = useMemo(() => getExternalSourceFiles(manifest), [manifest]);
+  const loadedSourceFiles = useMemo(
+    () => Object.fromEntries(Object.entries(sourceFiles).map(([path, content]) =>
+      [path, typeof content === 'string' ? parseManifestText(content) : null])),
+    [sourceFiles]
+  );
+  const externalSourceFiles = useMemo(
+    () => getExternalSourceFiles(manifest, loadedSourceFiles),
+    [manifest, loadedSourceFiles]
+  );
 
   // === Submission ===
   const version = getLatestVersion(metainfo);

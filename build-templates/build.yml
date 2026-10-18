@@ -60,7 +60,10 @@ jobs:
 
       - name: Fetch shared-modules
         run: |
-          if grep -rq 'shared-modules/' *.json *.yaml *.yml 2>/dev/null; then
+          # Recursive, since an included module file may sit in a subdirectory.
+          # .github is skipped because this workflow names shared-modules itself.
+          if grep -rqs --include='*.json' --include='*.yaml' --include='*.yml' \
+               --exclude-dir=.git --exclude-dir=.github 'shared-modules/' .; then
             echo "Manifest references shared-modules, cloning..."
             git clone --depth=1 https://github.com/flathub/shared-modules.git shared-modules
           else
