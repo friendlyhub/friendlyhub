@@ -101,6 +101,95 @@ jobs:
           echo ""
           echo "Manifest is valid."
 
+      # flatpak-builder needs every file the manifest names, so a missing one
+      # should fail here rather than in the build after merge.
+      - name: Check companion files
+        env:
+          MANIFEST: ${{ steps.detect.outputs.manifest }}
+        run: |
+          to_json() {
+            case "$1" in
+              *.yaml|*.yml)
+                if ! command -v yq >/dev/null; then
+                  sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+                  sudo chmod +x /usr/local/bin/yq
+                fi
+                yq -o=json '.' "$2" ;;
+              *) cat "$2" ;;
+            esac
+          }
+
+          W="${RUNNER_TEMP}/companions"
+          mkdir -p "${W}"
+          git ls-files -z | jq -Rs 'split("\u0000") | map(select(. != ""))' > "${W}/present.json"
+
+          # What a manifest or module needs beside it, by the same rules as the
+          # submissions repo's PR check and the web app's submit form: included
+          # module and sources files, and the local files of file, patch and
+          # archive sources, each relative to the file that names it.
+          cat > "${W}/companions.jq" <<'EOF'
+          def resolve($dir):
+            ($dir + "/" + .) | split("/") | map(select(. != "" and . != "."))
+            | reduce .[] as $part ([]; if $part == ".." and length > 0 and .[-1] != ".." then .[:-1] else . + [$part] end)
+            | join("/");
+          def is_local: type == "string" and (startswith("/") | not) and (contains("://") | not);
+          def needs($dir):
+            ((.sources // [])[]? |
+              if type == "string" then select(is_local) | {path: resolve($dir), module: false}
+              elif type == "object" then
+                ((select(.type == "file" or .type == "patch" or .type == "archive") | .path),
+                 (select(.type == "patch") | .paths[]?))
+                | select(is_local) | {path: resolve($dir), module: false}
+              else empty end),
+            ((.modules // [])[]? |
+              if type == "string" then select(is_local) | {path: resolve($dir), module: true}
+              elif type == "object" then needs($dir)
+              else empty end);
+          if type == "object" then [needs($dir)] else [] end
+          EOF
+
+          to_json "${MANIFEST}" "./${MANIFEST}" > "${W}/manifest.json"
+          jq --arg dir '' -f "${W}/companions.jq" "${W}/manifest.json" > "${W}/needed.json"
+
+          # An included module file can name further files, relative to itself
+          : > "${W}/walked.txt"
+          while :; do
+            mapfile -t TODO < <(jq -r --slurpfile present "${W}/present.json" --rawfile walked "${W}/walked.txt" '
+              ($walked | split("\n")) as $w
+              | .[] | select(.module) | .path
+              | select(IN($present[0][]) and (IN($w[]) | not) and (contains("\n") | not)
+                       and (startswith("shared-modules/") | not))' "${W}/needed.json")
+            [ "${#TODO[@]}" -eq 0 ] && break
+            for m in "${TODO[@]}"; do
+              echo "${m}" >> "${W}/walked.txt"
+              DIR="${m%/*}"
+              [ "${DIR}" = "${m}" ] && DIR=""
+              if ! to_json "${m}" "./${m}" > "${W}/module.json" \
+                 || ! jq --arg dir "${DIR}" -f "${W}/companions.jq" "${W}/module.json" > "${W}/more.json"; then
+                echo "::error::${m} is not a valid module file"
+                exit 1
+              fi
+              jq -s 'add | unique_by(.path)' "${W}/needed.json" "${W}/more.json" > "${W}/merged.json"
+              mv "${W}/merged.json" "${W}/needed.json"
+            done
+          done
+
+          # The build clones shared-modules itself. Names are printed JSON-encoded.
+          jq -r --slurpfile present "${W}/present.json" '
+            .[] | .path
+            | select(startswith("shared-modules/") | not)
+            | if startswith("../") then "\(tojson) is outside the repository, so the build cannot reach it"
+              elif (IN($present[0][]) | not) then "The manifest needs \(tojson), which is not in the repository"
+              else empty end' "${W}/needed.json" > "${W}/errors.txt"
+
+          if [ -s "${W}/errors.txt" ]; then
+            while IFS= read -r err; do
+              echo "::error::${err}"
+            done < "${W}/errors.txt"
+            exit 1
+          fi
+          echo "Companion files: $(jq -r 'map(.path | tojson) | join(", ")' "${W}/needed.json")"
+
   submit-and-build:
     name: Submit and Build
     # Only run for direct pushes/PR merges to main, NOT for commits pushed by the

@@ -46,7 +46,7 @@ jobs:
       # The PR head is untrusted fork code and this job is privileged -- it holds
       # pull-requests: write and the webhook secret. So the head is never checked
       # out; actions/checkout v7 refuses that under pull_request_target and the
-      # refusal is correct. Only the two files under validation are pulled in, as
+      # refusal is correct. Only the files under validation are pulled in, as
       # data, under names we pick. The head commit is reachable from this repo via
       # refs/pull/N/head while the PR is open, so the contents API resolves paths
       # at the head SHA without involving the fork.
@@ -115,6 +115,7 @@ jobs:
           fi
 
           echo "app_dir=${APP_DIR}" >> "$GITHUB_OUTPUT"
+          echo "manifest_name=${MANIFEST}" >> "$GITHUB_OUTPUT"
           echo "manifest_ext=${MANIFEST_EXT}" >> "$GITHUB_OUTPUT"
           echo "Detected app: ${APP_DIR}"
           echo "  Manifest: ${APP_DIR}/${MANIFEST}"
@@ -164,6 +165,119 @@ jobs:
           echo "${BODY}" | jq -r '.warnings[]' 2>/dev/null | while read -r warn; do
             echo "::warning::${warn}"
           done
+
+      # The merge step sends every file in the app directory, so anything the
+      # manifest needs has to be there, and every name has to be one the API
+      # accepts. Otherwise the PR merges and only then fails.
+      - name: Check companion files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ steps.pr.outputs.sha }}
+          APP_DIR: ${{ steps.detect.outputs.app_dir }}
+          MANIFEST_NAME: ${{ steps.detect.outputs.manifest_name }}
+          MANIFEST_EXT: ${{ steps.detect.outputs.manifest_ext }}
+        run: |
+          to_json() {
+            case "$1" in
+              *.yaml|*.yml)
+                if ! command -v yq >/dev/null; then
+                  sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+                  sudo chmod +x /usr/local/bin/yq
+                fi
+                yq -o=json '.' "$2" ;;
+              *) cat "$2" ;;
+            esac
+          }
+
+          # Every file in the app directory at the PR head, by path relative to it
+          ROOT_TREE=$(gh api "repos/${REPO}/git/commits/${HEAD_SHA}" --jq '.tree.sha')
+          DIR_TREE=$(gh api "repos/${REPO}/git/trees/${ROOT_TREE}" --jq ".tree[] | select(.path == \"${APP_DIR}\") | .sha")
+          gh api "repos/${REPO}/git/trees/${DIR_TREE}?recursive=1" \
+            --jq '[.tree[] | select(.type == "blob") | .path]' > work/present.json
+
+          # What a manifest or module needs beside it, by the same rules as
+          # getExternalSourceFiles in the web app's submit form: included module
+          # and sources files, and the local files of file, patch and archive
+          # sources, each relative to the file that names it.
+          cat > work/companions.jq <<'EOF'
+          def resolve($dir):
+            ($dir + "/" + .) | split("/") | map(select(. != "" and . != "."))
+            | reduce .[] as $part ([]; if $part == ".." and length > 0 and .[-1] != ".." then .[:-1] else . + [$part] end)
+            | join("/");
+          def is_local: type == "string" and (startswith("/") | not) and (contains("://") | not);
+          def needs($dir):
+            ((.sources // [])[]? |
+              if type == "string" then select(is_local) | {path: resolve($dir), module: false}
+              elif type == "object" then
+                ((select(.type == "file" or .type == "patch" or .type == "archive") | .path),
+                 (select(.type == "patch") | .paths[]?))
+                | select(is_local) | {path: resolve($dir), module: false}
+              else empty end),
+            ((.modules // [])[]? |
+              if type == "string" then select(is_local) | {path: resolve($dir), module: true}
+              elif type == "object" then needs($dir)
+              else empty end);
+          if type == "object" then [needs($dir)] else [] end
+          EOF
+
+          to_json "manifest.${MANIFEST_EXT}" "work/manifest.${MANIFEST_EXT}" > work/manifest-data.json
+          jq --arg dir '' -f work/companions.jq work/manifest-data.json > work/needed.json
+
+          # Each part as the API accepts it: no leading dot, so no hidden files and no ..
+          SAFE_PATH='\A[A-Za-z0-9_+-][A-Za-z0-9._+-]*(/[A-Za-z0-9_+-][A-Za-z0-9._+-]*)*\z'
+
+          # An included module file can name further files, relative to itself.
+          # Only paths that exist in the PR and pass SAFE_PATH reach a request URL.
+          : > work/walked.txt
+          while :; do
+            mapfile -t TODO < <(jq -r --slurpfile present work/present.json \
+              --rawfile walked work/walked.txt --arg safe "${SAFE_PATH}" '
+              ($walked | split("\n")) as $w
+              | .[] | select(.module) | .path
+              | select(test($safe) and IN($present[0][]) and (IN($w[]) | not)
+                       and (startswith("shared-modules/") | not))' work/needed.json)
+            [ "${#TODO[@]}" -eq 0 ] && break
+            for m in "${TODO[@]}"; do
+              echo "${m}" >> work/walked.txt
+              DIR="${m%/*}"
+              [ "${DIR}" = "${m}" ] && DIR=""
+              gh api "repos/${REPO}/contents/${APP_DIR}/${m}?ref=${HEAD_SHA}" \
+                -H "Accept: application/vnd.github.raw" > work/module
+              if ! to_json "${m}" work/module > work/module.json \
+                 || ! jq --arg dir "${DIR}" -f work/companions.jq work/module.json > work/more.json; then
+                echo "::error::${APP_DIR}/${m} is not a valid module file"
+                exit 1
+              fi
+              jq -s 'add | unique_by(.path)' work/needed.json work/more.json > work/merged.json
+              mv work/merged.json work/needed.json
+            done
+          done
+
+          # Names come from the PR, so each is printed JSON-encoded
+          jq -r --slurpfile present work/present.json --arg metainfo "${APP_DIR}.metainfo.xml" '
+            .[] | .path
+            | select((startswith("shared-modules/") or . == $metainfo) | not)
+            | if startswith("../") then "\(tojson) is outside the app directory, so it cannot be submitted"
+              elif test("(\\A|/)\\.") then "\(tojson) is hidden, and hidden files are not submitted"
+              elif (IN($present[0][]) | not) then "The manifest needs \(tojson), which is not in the app directory"
+              else empty end' work/needed.json > work/errors.txt
+
+          jq -r --arg manifest "${MANIFEST_NAME}" --arg metainfo "${APP_DIR}.metainfo.xml" \
+            --arg server_manifest "${APP_DIR}.json" --arg safe "${SAFE_PATH}" '
+            .[]
+            | select((test("(\\A|/)\\.") or startswith("shared-modules/") or . == $manifest or . == $metainfo) | not)
+            | if . == $server_manifest then "\(tojson) would replace the manifest that FriendlyHub writes"
+              elif (test($safe) | not) then "\(tojson) cannot be submitted: names may only use letters, digits, ., _, + and -"
+              else empty end' work/present.json >> work/errors.txt
+
+          if [ -s work/errors.txt ]; then
+            while IFS= read -r err; do
+              echo "::error::${err}"
+            done < work/errors.txt
+            exit 1
+          fi
+          echo "Companion files: $(jq -r 'map(.path | tojson) | join(", ")' work/needed.json)"
 
       - name: Validate metainfo
         env:

@@ -20,6 +20,8 @@ Components are versioned independently: **server**, **web**, **builder-image**, 
 
 ### Added
 - Binary companion files. A `source_files` value may now be `{"base64": "..."}`, which the API passes straight to GitHub. A plain string still means text, so existing clients and in-flight merge runs are unaffected. The merge step sends any file that is not valid UTF-8 this way, which covers icons and local archives.
+- The submissions repo's PR check now checks companion files, so a PR fails before merge instead of after. It lists the app directory from the git tree at the PR head and works out what the manifest needs, by the same rules as the submit form. That includes the files named by included module files, which it fetches as data. It reports any file that is missing, outside the app directory or hidden (since the merge step skips hidden files), any name the API would refuse, and a stray `<app-id>.json`. The job still never checks out the PR. Names from the PR are printed JSON-encoded, and only paths that exist in the PR and pass the API's path rules ever reach a request URL.
+- Each app repo's PR check (`build-templates/pr-check.yml`) does the same against its own checkout, reporting files that are missing or outside the repository. Hidden files and unusual names are fine there, because flatpak-builder reads the checkout directly and the API never handles the files. App repos get the check on their next submission.
 
 ## [web-0.1.4] - 2026-10-18
 
